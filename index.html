@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#f4f0ec">
+    <title>Miner Switch</title>
+    
+    <!-- Fixes the favicon.ico 404 Error -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🕹️</text></svg>">
+    
+    <!-- Real Telegram Web App SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- ADSGRAM SDK (For Rewarded Video Ads) -->
+    <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- 3D Vector Background Shapes -->
+    <div class="bg-shapes">
+        <svg class="shape shape-1" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <path d="M50 0 L60 40 L100 50 L60 60 L50 100 L40 60 L0 50 L40 40 Z" fill="var(--accent-purple)" stroke="#111" stroke-width="4" stroke-linejoin="round"/>
+        </svg>
+        <svg class="shape shape-2" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="40" fill="var(--accent-cyan)" stroke="#111" stroke-width="4"/>
+        </svg>
+        <svg class="shape shape-3" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="20" width="60" height="60" rx="15" fill="var(--accent-yellow)" stroke="#111" stroke-width="4" transform="rotate(15 50 50)"/>
+        </svg>
+        <svg class="shape shape-4" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="50,10 90,90 10,90" fill="var(--accent-red)" stroke="#111" stroke-width="4" stroke-linejoin="round" transform="rotate(-20 50 50)"/>
+        </svg>
+    </div>
+
+    <div id="app-container">
+        
+        <!-- Header area -->
+        <header class="top-header">
+            <div class="coin-balance-pill">
+                <span class="coin-icon">🪙</span>
+                <span id="header-wallet">0.00</span>
+            </div>
+            <div class="app-logo">
+                <div class="logo-icon">🕹️</div>
+                <div class="logo-text">MINER SWITCH</div>
+            </div>
+            <div class="notification-icon">🔔<div class="dot"></div></div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main id="main-content">
+
+            <!-- 1. MINING TAB -->
+            <div id="mining-tab" class="tab-content active">
+                <div class="feature-card">
+                    <div class="card-bg-effect"></div>
+                    <div class="card-content">
+                        <h2>Cloud Miner, <span class="highlight-purple">Pro!</span></h2>
+                        <p class="subtitle">A powerful rig generating constant passive income.</p>
+                        
+                        <div style="display: flex; gap: 10px; margin-bottom: 24px;">
+                            <div class="stat-pill" style="margin-bottom: 0;">
+                                <span class="stat-icon">⚡</span>
+                                <span id="gh-display">0</span> GH Power
+                            </div>
+                            <div class="stat-pill streak-pill" style="margin-bottom: 0;">
+                                <span class="stat-icon">🔥</span>
+                                <span id="streak-display">Day 1 (1.0x)</span>
+                            </div>
+                        </div>
+
+                        <div class="ability-section">
+                            <h3>Mining Status</h3>
+                            <div class="ability-row">
+                                <div class="ability-info">
+                                    <span>Daily Gen (Coins)</span>
+                                    <span id="daily-gen-display">0.00</span>
+                                </div>
+                                <div class="progress-bar"><div class="fill fill-yellow" style="width: 100%;"></div></div>
+                            </div>
+                            
+                            <div class="ability-row">
+                                <div class="ability-info">
+                                    <span>Rig Temperature (Stops at 100%)</span>
+                                    <span id="heat-percent-display">0%</span>
+                                </div>
+                                <div class="progress-bar"><div class="fill fill-red" id="heat-fill" style="width: 0%;"></div></div>
+                            </div>
+
+                            <div class="ability-row">
+                                <div class="ability-info">
+                                    <span>Global Pool (300M)</span>
+                                    <span id="pool-percent">100%</span>
+                                </div>
+                                <div class="progress-bar"><div class="fill fill-cyan" id="pool-fill" style="width: 100%;"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="cave-scene">
+                        <div class="cave-bg"></div>
+                        <div class="fly-coin d1">🪙</div>
+                        <div class="fly-coin d2">🪙</div>
+                        <div class="miner-rock">🪨</div>
+                        <div class="miner-emoji">
+                            <svg viewBox="0 0 100 100" width="75" height="75" xmlns="http://www.w3.org/2000/svg">
+                                <!-- Body -->
+                                <path d="M20,100 C20,70 30,60 50,60 C70,60 80,70 80,100" fill="var(--accent-purple)" stroke="#1A1008" stroke-width="5" stroke-linejoin="round"/>
+                                <!-- Body Cel-shade -->
+                                <path d="M50,60 C70,60 80,70 80,100 L60,100 C60,75 55,65 50,65 Z" fill="rgba(0,0,0,0.1)"/>
+                                
+                                <!-- Head -->
+                                <rect x="25" y="35" width="50" height="45" rx="16" fill="#ffceb4" stroke="#1A1008" stroke-width="5" stroke-linejoin="round"/>
+                                <!-- Head Cel-shade -->
+                                <path d="M75,51 L75,64 C75,72.8 67.8,80 59,80 L50,80 C58.8,80 66,72.8 66,64 L66,51 Z" fill="rgba(0,0,0,0.1)"/>
+
+                                <!-- Beard -->
+                                <path d="M25,60 C25,90 50,95 50,95 C50,95 75,90 75,60 C60,70 40,70 25,60 Z" fill="#ffffff" stroke="#1A1008" stroke-width="5" stroke-linejoin="round"/>
+                                <!-- Beard Cel-shade -->
+                                <path d="M50,95 C50,95 75,90 75,60 C68,64 60,67 50,68 C55,75 55,85 50,95 Z" fill="rgba(0,0,0,0.1)"/>
+
+                                <!-- Helmet -->
+                                <path d="M15,45 C15,15 85,15 85,45 Z" fill="var(--accent-yellow)" stroke="#1A1008" stroke-width="5" stroke-linejoin="round"/>
+                                <!-- Helmet Rim -->
+                                <rect x="10" y="45" width="80" height="10" rx="5" fill="var(--accent-yellow)" stroke="#1A1008" stroke-width="5" stroke-linejoin="round"/>
+                                <!-- Helmet Cel-shade -->
+                                <path d="M50,15 C75,15 85,35 85,45 L70,45 C70,25 60,20 50,20 Z" fill="rgba(0,0,0,0.1)"/>
+                                
+                                <!-- Helmet Light -->
+                                <rect x="38" y="12" width="24" height="20" rx="6" fill="var(--accent-cyan)" stroke="#1A1008" stroke-width="5" stroke-linejoin="round"/>
+                                <circle cx="50" cy="22" r="5" fill="#ffffff"/>
+                                
+                                <!-- Eyes (Determined RPG look) -->
+                                <path d="M 35 55 L 45 58" stroke="#1A1008" stroke-width="5" stroke-linecap="round"/>
+                                <path d="M 65 55 L 55 58" stroke="#1A1008" stroke-width="5" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="miner-pickaxe">⛏️</div>
+                    </div>
+                </div>
+
+                <div class="action-section">
+                    <div class="pending-info">
+                        <h3>Pending Coins</h3>
+                        <div class="pending-amount" id="pending-coins">0.0000</div>
+                        <p class="claim-time">Minimum claim: 1.0000 Coin</p>
+                    </div>
+                    
+                    <button class="btn btn-blue mb-10" id="btn-cooldown" onclick="coolDownRig()">❄️ Cool Down Rig</button>
+                    
+                    <div class="button-group">
+                        <button class="btn btn-disabled" id="btn-claim" onclick="claimCoins()">Need 1 Coin ⏳</button>
+                        <button class="btn btn-secondary" onclick="watchAd('mining')">Watch Ad (+10 GH) 📺</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. TASKS, SOCIAL & SHOP TAB -->
+            <div id="tasks-tab" class="tab-content">
+                <div class="sub-nav mb-20">
+                    <button class="sub-nav-btn active" onclick="switchSubTab('tasks-view')">Tasks & Streak</button>
+                    <button class="sub-nav-btn" onclick="switchSubTab('social-view')" style="color: var(--accent-purple);">Viral Social 🚀</button>
+                    <button class="sub-nav-btn" onclick="switchSubTab('shop-view')">Upgrades</button>
+                </div>
+
+                <!-- TASKS VIEW -->
+                <div id="tasks-view" class="sub-tab-content active">
+                    <div class="feature-card" style="padding: 20px;">
+                        <h3 style="font-size: 16px; margin-bottom: 5px;">🔥 Daily Check-in Streak</h3>
+                        <p class="subtitle" style="margin-bottom: 10px;">Login every day to increase your mining multiplier! (Max 1.5x)</p>
+                        <div class="streak-days-container" id="streak-days-ui"></div>
+                    </div>
+
+                    <h3 style="font-size: 16px; margin: 20px 0 10px 0;">Available Tasks</h3>
+                    <div class="task-list">
+                        <div class="task-item">
+                            <div class="task-info">
+                                <span class="task-icon">📱</span>
+                                <div>
+                                    <div class="task-title">Join Telegram Channel</div>
+                                    <div class="task-reward">+20 GH Power</div>
+                                </div>
+                            </div>
+                            <button id="btn-task-tg" class="btn btn-action task-btn" onclick="completeTask('tg', 'gh', 20, this)">Do Task</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIRAL SOCIAL VIEW -->
+                <div id="social-view" class="sub-tab-content">
+                    <div class="feature-card" style="padding: 20px; border-color: var(--accent-purple);">
+                        <h2 style="font-size: 20px;">📱 Turn Views into <span class="highlight-purple">GH/s!</span></h2>
+                        <p class="subtitle mt-10">Get paid for your social media clout. Post a video or tweet about Miners Hub on X, TikTok, or YouTube Shorts.</p>
+                        
+                        <div class="ability-section mt-10" style="background: var(--card-bg); padding: 15px; border-radius: 12px; border: 2px solid var(--card-border); box-shadow: var(--shadow-sm);">
+                            <h3 style="color: var(--accent-purple); margin-bottom: 8px;">💸 THE REWARDS</h3>
+                            <ul style="font-size: 12px; margin-left: 20px; line-height: 1.6;">
+                                <li>Earn <b>0.5 GH/s</b> for every verified view!</li>
+                                <li><i>Example: 1,000 views = +500 GH/s permanently added!</i></li>
+                                <li><b>Max Reward:</b> 2,500 GH/s per post.</li>
+                            </ul>
+                            
+                            <h3 style="color: var(--accent-red); margin-top: 15px; margin-bottom: 8px;">⚠️ THE RULES</h3>
+                            <ul style="font-size: 11px; color: var(--text-muted); margin-left: 20px; line-height: 1.5;">
+                                <li>Your post must be live for <b>24 hours</b> before submitting.</li>
+                                <li><b>NO BOTS:</b> We manually verify views. Botted views (e.g., 5k views with 0 likes) = Instant Ban.</li>
+                                <li>Maximum 1 submission per day.</li>
+                            </ul>
+                        </div>
+
+                        <h3 style="font-size: 14px; margin-top: 20px;">1. Copy The Template</h3>
+                        <div class="template-box">
+                            🚨 Found the ultimate hidden crypto gem! 🚨<br><br>
+                            ⛏️ Miners Hub just launched yesterday and early users are mining a massive 300,000,000 Coin Prize Pool completely for FREE.<br><br>
+                            Start mining from your phone right now before the pool drains out! 💸👇<br><br>
+                            Play here: https://t.me/miners_hub_bot/hub<br><br>
+                            #MinersHub #CryptoMining #Airdrop #TelegramBot
+                        </div>
+                        <button class="btn btn-secondary mt-10" onclick="copyTemplate()">📋 Copy to Clipboard</button>
+
+                        <h3 style="font-size: 14px; margin-top: 25px;">2. Submit Your Link</h3>
+                        <select id="social-platform" class="glass-input" style="appearance: auto;">
+                            <option value="X (Twitter)">X (Twitter)</option>
+                            <option value="TikTok">TikTok</option>
+                            <option value="YouTube Shorts">YouTube Shorts</option>
+                            <option value="Instagram Reels">Instagram Reels</option>
+                            <option value="Telegram Channel">Telegram Channel</option>
+                        </select>
+                        <input type="text" id="social-url" placeholder="Paste your post URL here..." class="glass-input" style="margin-top: 10px;">
+                        
+                        <button id="btn-submit-social" class="btn btn-action mt-20" onclick="submitSocialPost()">🚀 Submit for Review</button>
+
+                        <!-- NEW: SUBMISSION HISTORY SECTION -->
+                        <h3 style="font-size: 14px; margin-top: 30px; border-top: 2px dashed var(--card-border); padding-top: 20px;">🕒 Submission History</h3>
+                        <div id="social-history-list" class="history-list mt-10">
+                            <!-- Placeholder Data -->
+                            <div class="history-item">
+                                <div class="history-info">
+                                    <span class="history-platform">TikTok</span>
+                                    <span class="status-badge status-pending">PENDING</span>
+                                </div>
+                                <div class="history-reward">0 GH</div>
+                            </div>
+                            <div class="history-item">
+                                <div class="history-info">
+                                    <span class="history-platform">X (Twitter)</span>
+                                    <span class="status-badge status-approved">APPROVED</span>
+                                </div>
+                                <div class="history-reward highlight-purple">+250 GH</div>
+                            </div>
+                        </div>
+                        
+                    </div>
+                </div>
+
+                <!-- SHOP VIEW -->
+                <div id="shop-view" class="sub-tab-content hidden">
+                    <div class="maintenance-box">
+                        <div class="maintenance-icon">🚧</div>
+                        <h2>Under Maintenance</h2>
+                        <p class="subtitle">The engineers are currently overhauling the rig shop and upgrade center. Check back soon for powerful new hardware!</p>
+                        <div class="progress-bar mt-20"><div class="fill fill-yellow" style="width: 75%; animation: progressAnim 2s infinite alternate;"></div></div>
+                        <p style="font-size: 10px; color: var(--text-muted); margin-top: 10px;">Update Progress: 75%</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. MINIGAME TAB -->
+            <div id="minigame-tab" class="tab-content">
+                <div id="game-menu">
+                    <div class="action-section mb-20" style="display: flex; justify-content: space-between; align-items: center; padding: 15px;">
+                        <div class="stat-pill" style="margin: 0;">
+                            <span class="stat-icon">❤️</span>
+                            <span id="lives-display">0</span> Lives
+                        </div>
+                        <button class="btn btn-secondary" style="width: auto; padding: 10px 15px;" onclick="watchAd('lives')">+5 Lives 📺</button>
+                    </div>
+
+                    <div class="feature-card minigame-card">
+                        <div class="card-bg-effect"></div>
+                        <div class="card-content">
+                            <h2>Crystal <span class="highlight-cyan">Overload</span></h2>
+                            <p class="subtitle">Tap insanely fast to overcharge the core and win power.</p>
+                            <button class="btn btn-action mt-10" onclick="initGame1()">Play (1 ❤️)</button>
+                        </div>
+                        <div class="pop-out-element float-alt">☄️</div>
+                    </div>
+
+                    <div class="feature-card minigame-card" style="margin-top: 15px;">
+                        <div class="card-bg-effect"></div>
+                        <div class="card-content">
+                            <h2>Core <span class="highlight-green">Alignment</span></h2>
+                            <p class="subtitle">Test your reflexes. Stop the laser in the sweet spot!</p>
+                            <button class="btn btn-action mt-10" style="background: var(--accent-green);" onclick="initGame2()">Play (1 ❤️)</button>
+                        </div>
+                        <div class="pop-out-element">🎯</div>
+                    </div>
+                </div>
+
+                <div id="game-1-area" class="hidden">
+                    <div class="game-header">
+                        <button class="btn btn-secondary btn-back" onclick="exitGame()">⬅ Back</button>
+                        <h3>Crystal Overload</h3>
+                    </div>
+                    <div class="active-game-box">
+                        <p id="g1-instruction" class="game-instruction">Tap 30 times in 5 seconds!</p>
+                        <div class="progress-bar mt-10"><div class="fill fill-cyan" id="g1-progress" style="width: 0%;"></div></div>
+                        <p class="timer-text" id="g1-timer">5.0s</p>
+                        <div class="crystal-target" id="g1-target" onclick="tapCrystal()">💎</div>
+                        <button class="btn btn-action mt-20 hidden" id="g1-start-btn" onclick="startGame1()">START TAP</button>
+                    </div>
+                </div>
+
+                <div id="game-2-area" class="hidden">
+                    <div class="game-header">
+                        <button class="btn btn-secondary btn-back" onclick="exitGame()">⬅ Back</button>
+                        <h3>Core Alignment</h3>
+                    </div>
+                    <div class="active-game-box">
+                        <p id="g2-instruction" class="game-instruction">Tap anywhere to stop the laser!</p>
+                        <div class="timing-track-container" id="g2-track-container" onclick="stopSlider()">
+                            <div class="timing-track">
+                                <div class="sweet-spot"></div>
+                                <div class="slider-cursor" id="g2-slider"></div>
+                            </div>
+                        </div>
+                        <button class="btn btn-action mt-20" style="background: var(--accent-green);" id="g2-start-btn" onclick="startGame2()">START LASER</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. GLOBAL TAB -->
+            <div id="global-tab" class="tab-content">
+                <div class="feature-card global-card">
+                    <div class="card-bg-effect"></div>
+                    <div class="card-content">
+                        <h2>Network <span class="highlight-green">Stats</span></h2>
+                        <p class="subtitle">Live view of the worldwide 300M mining pool.</p>
+                        
+                        <div class="ability-section mt-20">
+                            <h3>Pool Distribution</h3>
+                            <div class="ability-row">
+                                <div class="ability-info">
+                                    <span>Mined Coins</span>
+                                    <span id="global-mined">0.00</span>
+                                </div>
+                                <div class="progress-bar"><div class="fill fill-cyan" id="global-mined-fill" style="width: 0%;"></div></div>
+                            </div>
+                            <div class="ability-row">
+                                <div class="ability-info">
+                                    <span>Remaining Coins</span>
+                                    <span id="global-remaining">300,000,000</span>
+                                </div>
+                                <div class="progress-bar"><div class="fill fill-yellow" id="global-remaining-fill" style="width: 100%;"></div></div>
+                            </div>
+                        </div>
+
+                        <div class="ability-section mt-20">
+                            <h3>Live Metrics</h3>
+                            <div class="ability-row">
+                                <div class="ability-info">
+                                    <span>Total Active Players</span>
+                                    <span id="global-players">142,530</span>
+                                </div>
+                            </div>
+                            <div class="ability-row">
+                                <div class="ability-info">
+                                    <span>Total Network Power</span>
+                                    <span id="global-power">5,420,000 GH</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pop-out-element" style="filter: drop-shadow(4px 4px 0px #111);">🌍</div>
+                </div>
+
+                <div class="feature-card" style="margin-top: 15px;">
+                    <div class="card-bg-effect"></div>
+                    <div class="card-content" style="width: 75%;">
+                        <h2>Phase 2 <span style="color: var(--accent-purple);">Locked</span></h2>
+                        <p class="subtitle">More info coming soon! Prepare for the next evolution.</p>
+                        <div class="ability-section mt-20">
+                            <h3>Unlock Requirement</h3>
+                            <div class="ability-row" style="margin-bottom: 4px;">
+                                <div class="ability-info" style="font-size: 10px; color: var(--accent-purple);">
+                                    <span>Hit 100 users to unlock new info or next stage of the mining coin.</span>
+                                </div>
+                            </div>
+                            <div class="ability-row">
+                                <div class="ability-info">
+                                    <span>Current Progress</span>
+                                    <span>45 / 100</span>
+                                </div>
+                                <div class="progress-bar"><div class="fill" style="background: var(--accent-purple); width: 45%; border-right: 2px solid #111;"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="pop-out-element" style="font-size: 70px; right: -5px; bottom: 10px; filter: drop-shadow(4px 4px 0px #111);">🔒</div>
+                </div>
+            </div>
+
+            <!-- 6. FRENS (REFERRAL) TAB -->
+            <div id="frens-tab" class="tab-content">
+                <div class="feature-card">
+                    <div class="card-content" style="width: 100%;">
+                        <h2>Invite <span class="highlight-cyan">Frens</span></h2>
+                        <p class="subtitle">Earn <span class="highlight-yellow">100 GH/s</span> power and <span class="highlight-yellow">100 Coins</span> for every friend who joins!</p>
+                        
+                        <div class="address-box mt-20" style="text-align: center;">
+                            <h3>Your Invite Link</h3>
+                            <input type="text" id="invite-link-input" value="https://t.me/miners_hub_bot/hub?startapp=ref_12345" class="glass-input" readonly style="text-align: center; font-size: 12px;">
+                            <button class="btn btn-primary mt-10" onclick="copyInviteLink()" style="padding: 10px; width: 100%;">Copy Link 📋</button>
+                            <button class="btn btn-action mt-10" onclick="shareInviteLink()" style="padding: 10px; width: 100%;">Share to Telegram 🚀</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="card-content" style="width: 100%;">
+                        <h2>Referral <span class="highlight-green">History</span></h2>
+                        <p class="subtitle">Your invited friends will appear here.</p>
+                        
+                        <div id="referral-history-list" style="max-height: 200px; overflow-y: auto; margin-top: 15px;">
+                            <!-- Mock Data for now -->
+                            <div class="task-item" style="margin-bottom: 10px;">
+                                <div class="task-info">
+                                    <span class="task-title">@crypto_king</span>
+                                    <span class="task-reward">+100 GH/s | +100 🪙</span>
+                                </div>
+                                <div class="task-status">Joined</div>
+                            </div>
+                            <div class="task-item" style="margin-bottom: 10px;">
+                                <div class="task-info">
+                                    <span class="task-title">@miner_dude</span>
+                                    <span class="task-reward">+100 GH/s | +100 🪙</span>
+                                </div>
+                                <div class="task-status">Joined</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. WALLET TAB -->
+            <div id="wallet-tab" class="tab-content">
+                <div class="feature-card wallet-card">
+                    <div class="card-content">
+                        <h2>Your <span class="highlight-yellow">Wallet</span></h2>
+                        <p class="subtitle">Securely store and withdraw your mined coins.</p>
+                        
+                        <div class="massive-balance">
+                            <span id="wallet-coins">0.0000</span> 🪙
+                        </div>
+
+                        <div class="ability-section mt-20">
+                            <h3>Withdrawal Status</h3>
+                            <div class="ability-row">
+                                <div class="ability-info">
+                                    <span id="withdraw-status-text">Pool Depletion Needed</span>
+                                    <span id="pool-remaining-wallet">300,000,000</span>
+                                </div>
+                                <div class="progress-bar"><div class="fill fill-cyan" id="withdraw-progress" style="width: 0%;"></div></div>
+                            </div>
+                        </div>
+                        
+                        <div class="address-box mt-20">
+                            <h3>Withdrawal Address</h3>
+                            <input type="text" id="sol-address-input" placeholder="Enter SOL Address..." class="glass-input">
+                            <button class="btn btn-secondary mt-10" onclick="saveAddress()" style="padding: 10px;">Save Address</button>
+                            <p class="small-address-label">Saved: <span id="display-sol-address" class="highlight-cyan">None</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="action-section">
+                    <button class="btn btn-disabled" id="btn-withdraw" onclick="withdraw()">Withdraw Funds 🏦</button>
+                    <p class="subtitle" style="text-align: center; margin-top: 10px; font-size: 10px;">Withdrawal opens when 300M pool is mined.</p>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <div class="nav-item active" onclick="switchTab('mining')">
+                <div class="nav-icon">⛏️</div>
+                <span>Mine</span>
+            </div>
+            <div class="nav-item" onclick="switchTab('tasks')">
+                <div class="nav-icon">📋</div>
+                <span>Tasks</span>
+            </div>
+            <div class="nav-item" onclick="switchTab('minigame')">
+                <div class="nav-icon">🎮</div>
+                <span>Play</span>
+            </div>
+            <div class="nav-item" onclick="switchTab('global')">
+                <div class="nav-icon">🌍</div>
+                <span>Global</span>
+            </div>
+            <div class="nav-item" onclick="switchTab('frens')">
+                <div class="nav-icon">🤝</div>
+                <span>Frens</span>
+            </div>
+            <div class="nav-item" onclick="switchTab('wallet')">
+                <div class="nav-icon">💼</div>
+                <span>Wallet</span>
+            </div>
+        </nav>
+
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="modal">
+            <div class="modal-card">
+                <div class="loading-ring"></div>
+                <p style="font-weight: 800; letter-spacing: 1px; margin-top: 10px;">SYNCING DATA...</p>
+            </div>
+        </div>
+
+        <!-- NEW: Social Mining Hype Popup -->
+        <!-- $1,000 Airdrop Early User Popup -->
+        <div id="social-modal" class="modal hidden">
+            <div class="modal-card">
+                <div style="font-size: 60px; filter: drop-shadow(4px 4px 0px #111);">💸</div>
+                <h2 style="color: var(--accent-green); margin-bottom: 5px; font-weight: 900;">$1,000 Airdrop is LIVE!</h2>
+                
+                <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px;">
+                    An exclusive reward pool is reserved for our <b>early users</b>!<br><br>
+                    The massive airdrop phase will officially unlock and distribute once the global network hits:<br><br>
+                    👥 <b>1,000 Total Users</b><br>
+                    ⛏️ <b>30,000,000 Coins Mined</b><br><br>
+                    Keep mining, level up your power, and invite friends to trigger the unlock faster!
+                </p>
+                
+                <button class="btn btn-action" style="background: var(--accent-green); color: #111;" onclick="closeSocialModal()">
+                    Secure My Spot! 🚀
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
