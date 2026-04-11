@@ -174,6 +174,7 @@ async function loadGameData() {
     showSocialModal(); // Shows the hype popup
     updateSocialHistoryUI(); // Renders the social history list
     loadReferralHistory(); // Load Frens history
+    loadLeaderboards(); // Load Global Leaderboards
     updateUI();
     requestAnimationFrame(gameLoop);
 }
@@ -331,6 +332,15 @@ function updateUI() {
     els.globalPlayers.innerText = globalStats.totalPlayers.toLocaleString(); 
     els.globalPower.innerText = globalStats.totalPower.toLocaleString() + " GH";
     
+    // Update Phase 2 Progress
+    const phase2Goal = 100;
+    const phase2Current = Math.min(globalStats.totalPlayers, phase2Goal);
+    const phase2Percent = (phase2Current / phase2Goal) * 100;
+    const p2Text = document.getElementById('phase2-progress-text');
+    const p2Fill = document.getElementById('phase2-progress-fill');
+    if (p2Text) p2Text.innerText = `${phase2Current} / ${phase2Goal}`;
+    if (p2Fill) p2Fill.style.width = `${phase2Percent}%`;
+    
     if (globalStats.totalMined >= TOTAL_POOL) {
         els.btnWithdraw.className = "btn btn-action";
         els.withdrawStatusText.innerText = "Withdrawals Open!";
@@ -460,6 +470,30 @@ function showSocialModal() {
 function closeSocialModal() {
     haptic('light');
     const modal = document.getElementById('social-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function openReferralLeaderboard() {
+    haptic('light');
+    const modal = document.getElementById('referral-leaderboard-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeReferralLeaderboard() {
+    haptic('light');
+    const modal = document.getElementById('referral-leaderboard-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function openPowerLeaderboard() {
+    haptic('light');
+    const modal = document.getElementById('power-leaderboard-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closePowerLeaderboard() {
+    haptic('light');
+    const modal = document.getElementById('power-leaderboard-modal');
     if (modal) modal.classList.add('hidden');
 }
 
@@ -730,14 +764,18 @@ loadGameData();
 
 async function processReferral(referrerId) {
     try {
+        console.log("Processing referral for referrer:", referrerId);
         // 1. Check if already referred
-        const { data: existingRef } = await supabaseClient
+        const { data: existingRef, error: checkErr } = await supabaseClient
             .from('refferal2')
             .select('id')
             .eq('referred_id', tgUser.id)
-            .single();
+            .maybeSingle(); // Use maybeSingle to avoid throwing error on 0 rows
             
-        if (existingRef) return; // Already referred
+        if (existingRef) {
+            console.log("User already referred.");
+            return; // Already referred
+        }
 
         // 2. Insert into refferal2
         const { error: insertErr } = await supabaseClient
@@ -750,7 +788,7 @@ async function processReferral(referrerId) {
             }]);
 
         if (insertErr) {
-            console.error("Referral insert error:", insertErr);
+            console.error("Referral insert error (Check RLS policies!):", insertErr);
             return;
         }
 
@@ -765,16 +803,18 @@ async function processReferral(referrerId) {
             .from('players')
             .select('gh_power, wallet_coins')
             .eq('telegram_id', referrerId)
-            .single();
+            .maybeSingle();
             
         if (referrerData) {
-            await supabaseClient
+            const { error: updateErr } = await supabaseClient
                 .from('players')
                 .update({
                     gh_power: (Number(referrerData.gh_power) || 0) + 100,
                     wallet_coins: (Number(referrerData.wallet_coins) || 0) + 100
                 })
                 .eq('telegram_id', referrerId);
+                
+            if (updateErr) console.error("Failed to reward referrer (Check RLS!):", updateErr);
         }
 
     } catch (err) {
@@ -814,6 +854,86 @@ async function loadReferralHistory() {
         });
     } catch (err) {
         console.error("Failed to load referral history:", err);
+    }
+}
+
+async function loadLeaderboards() {
+    try {
+        // 1. Power Leaderboard
+        const { data: topMiners, error: minersErr } = await supabaseClient
+            .from('players')
+            .select('username, first_name, gh_power')
+            .order('gh_power', { ascending: false })
+            .limit(10);
+            
+        const powerListEl = document.getElementById('power-leaderboard');
+        if (powerListEl) {
+            if (topMiners && topMiners.length > 0) {
+                powerListEl.innerHTML = '';
+                topMiners.forEach((miner, index) => {
+                    const name = miner.username !== 'unknown' ? '@' + miner.username : miner.first_name;
+                    powerListEl.innerHTML += `
+                        <div class="task-item" style="margin-bottom: 10px;">
+                            <div class="task-info">
+                                <span class="task-title">#${index + 1} ${name}</span>
+                            </div>
+                            <div class="task-status" style="color: var(--accent-yellow);">${miner.gh_power} GH/s</div>
+                        </div>
+                    `;
+                });
+            } else {
+                powerListEl.innerHTML = '<p style="text-align:center; color:var(--text-muted); font-size:12px;">No miners found.</p>';
+            }
+        }
+
+        // 2. Referral Leaderboard
+        const { data: allRefs, error: refErr } = await supabaseClient
+            .from('refferal2')
+            .select('referrer_id');
+            
+        const refListEl = document.getElementById('referral-leaderboard');
+        if (refListEl) {
+            if (allRefs && allRefs.length > 0) {
+                const refCounts = {};
+                allRefs.forEach(ref => {
+                    refCounts[ref.referrer_id] = (refCounts[ref.referrer_id] || 0) + 1;
+                });
+                
+                // Sort by count
+                const sortedRefs = Object.entries(refCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+                
+                // Fetch names for top referrers
+                const topReferrerIds = sortedRefs.map(r => r[0]);
+                const { data: topReferrersData } = await supabaseClient
+                    .from('players')
+                    .select('telegram_id, username, first_name')
+                    .in('telegram_id', topReferrerIds);
+                    
+                const referrerMap = {};
+                if (topReferrersData) {
+                    topReferrersData.forEach(p => {
+                        referrerMap[p.telegram_id] = p.username !== 'unknown' ? '@' + p.username : p.first_name;
+                    });
+                }
+                
+                refListEl.innerHTML = '';
+                sortedRefs.forEach((ref, index) => {
+                    const name = referrerMap[ref[0]] || `User ${ref[0]}`;
+                    refListEl.innerHTML += `
+                        <div class="task-item" style="margin-bottom: 10px;">
+                            <div class="task-info">
+                                <span class="task-title">#${index + 1} ${name}</span>
+                            </div>
+                            <div class="task-status" style="color: var(--accent-cyan);">${ref[1]} Invites</div>
+                        </div>
+                    `;
+                });
+            } else {
+                refListEl.innerHTML = '<p style="text-align:center; color:var(--text-muted); font-size:12px;">No referrals yet.</p>';
+            }
+        }
+    } catch (err) {
+        console.error("Failed to load leaderboards:", err);
     }
 }
 
