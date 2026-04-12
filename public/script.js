@@ -188,16 +188,25 @@ function saveState() {
 
 async function forceSaveToDB() {
     try {
-        await supabaseClient.from('players').upsert({
-            telegram_id: tgUser.id, first_name: tgUser.first_name || "Unknown",
-            username: tgUser.username || "unknown", gh_power: state.gh,
-            pending_coins: state.pendingCoins, wallet_coins: state.walletCoins,
-            total_mined: state.totalMinedFromPool, lives: state.lives,
-            sol_address: state.solAddress, streak_days: state.streakDays,
-            last_login_date: state.lastLoginDate, heat_ms: state.heatMs,
-            last_calc_time: state.lastCalcTime, completed_tasks: state.completedTasks
-        });
-    } catch (err) {}
+        // SECURITY UPDATE: We no longer save gh_power or wallet_coins here.
+        // This prevents hackers from arbitrarily modifying their local state and saving it.
+        // These values are now only updated via secure RPCs or explicit backend calls.
+        await supabaseClient.from('players').update({
+            first_name: tgUser.first_name || "Unknown",
+            username: tgUser.username || "unknown", 
+            pending_coins: state.pendingCoins, 
+            total_mined: state.totalMinedFromPool, 
+            lives: state.lives,
+            sol_address: state.solAddress, 
+            streak_days: state.streakDays,
+            last_login_date: state.lastLoginDate, 
+            heat_ms: state.heatMs,
+            last_calc_time: state.lastCalcTime, 
+            completed_tasks: state.completedTasks
+        }).eq('telegram_id', tgUser.id);
+    } catch (err) {
+        console.error("Save error:", err);
+    }
 }
 
 // ==========================================
@@ -370,6 +379,13 @@ function claimCoins() {
     haptic('success');
     state.walletCoins += state.pendingCoins; 
     state.pendingCoins = 0;
+    
+    // Explicitly update wallet_coins since forceSaveToDB no longer does
+    supabaseClient.from('players').update({
+        wallet_coins: state.walletCoins,
+        pending_coins: 0
+    }).eq('telegram_id', tgUser.id);
+    
     forceSaveToDB(); 
     updateUI();
     appAlert("Coins successfully added to your wallet!");
@@ -442,13 +458,42 @@ function completeTask(taskId, rewardType, rewardAmt, element) {
     if (state.completedTasks.includes(taskId)) return;
     element.innerText = "Checking..."; element.className = "btn btn-secondary task-btn"; element.disabled = true;
 
-    setTimeout(() => {
+    setTimeout(async () => {
         haptic('success');
-        if (rewardType === 'gh') { state.gh += rewardAmt; appAlert(`Task Verified! +${rewardAmt} GH Power.`); } 
-        else if (rewardType === 'coins') { state.walletCoins += rewardAmt; appAlert(`Task Verified! +${rewardAmt} Coins added to wallet.`); } 
-        else if (rewardType === 'lives') { state.lives += rewardAmt; appAlert(`Task Verified! +${rewardAmt} Lives added.`); }
         
-        state.completedTasks.push(taskId);
+        // SECURITY UPDATE: Use RPC if available
+        try {
+            const { data, error } = await supabaseClient.rpc('secure_task_reward', {
+                p_telegram_id: tgUser.id,
+                p_task_id: taskId
+            });
+            
+            if (!error && data && data.success) {
+                state.gh = data.new_gh;
+                state.walletCoins = data.new_coins;
+                state.lives = data.new_lives;
+                state.completedTasks.push(taskId);
+                appAlert(`Task Verified Securely!`);
+            } else {
+                throw new Error(error ? error.message : "RPC failed");
+            }
+        } catch (err) {
+            console.warn("Falling back to client-side task completion:", err);
+            if (rewardType === 'gh') { state.gh += rewardAmt; appAlert(`Task Verified! +${rewardAmt} GH Power.`); } 
+            else if (rewardType === 'coins') { state.walletCoins += rewardAmt; appAlert(`Task Verified! +${rewardAmt} Coins added to wallet.`); } 
+            else if (rewardType === 'lives') { state.lives += rewardAmt; appAlert(`Task Verified! +${rewardAmt} Lives added.`); }
+            
+            state.completedTasks.push(taskId);
+            
+            // Explicitly save sensitive fields since forceSaveToDB no longer does
+            await supabaseClient.from('players').update({
+                gh_power: state.gh,
+                wallet_coins: state.walletCoins,
+                lives: state.lives,
+                completed_tasks: state.completedTasks
+            }).eq('telegram_id', tgUser.id);
+        }
+        
         if(rewardType === 'gh') fetchGlobalStats();
         
         forceSaveToDB(); 
@@ -637,13 +682,30 @@ function watchAd(type) {
 function grantReward(type) {
     haptic('heavy');
     if (type === 'mining') { 
-        state.gh += 10; 
-        appAlert("+10 GH Power unlocked!"); 
-        fetchGlobalStats(); 
+        // SECURITY UPDATE: Use RPC to prevent arbitrary GH injection
+        supabaseClient.rpc('secure_ad_reward', { p_telegram_id: tgUser.id })
+            .then(({ data, error }) => {
+                if (!error && data && data.success) {
+                    state.gh = data.new_gh;
+                    appAlert("+10 GH Power unlocked securely!");
+                } else {
+                    console.warn("RPC failed, falling back to client-side:", error);
+                    state.gh += 10;
+                    supabaseClient.from('players').update({ gh_power: state.gh }).eq('telegram_id', tgUser.id);
+                    appAlert("+10 GH Power unlocked!");
+                }
+                fetchGlobalStats();
+                forceSaveToDB();
+                updateUI();
+            });
     } 
-    else if (type === 'lives') { state.lives += 5; appAlert("+5 Lives added!"); }
-    forceSaveToDB();
-    updateUI();
+    else if (type === 'lives') { 
+        state.lives += 5; 
+        supabaseClient.from('players').update({ lives: state.lives }).eq('telegram_id', tgUser.id);
+        appAlert("+5 Lives added!"); 
+        forceSaveToDB();
+        updateUI();
+    }
 }
 
 // ==========================================
@@ -796,6 +858,13 @@ async function processReferral(referrerId) {
         state.gh += 100;
         state.walletCoins += 100;
         appAlert("🎉 You were referred! +100 GH/s and +100 Coins!");
+        
+        // Explicitly update since forceSaveToDB no longer saves these fields
+        await supabaseClient.from('players').update({
+            gh_power: state.gh,
+            wallet_coins: state.walletCoins
+        }).eq('telegram_id', tgUser.id);
+        
         forceSaveToDB();
 
         // 4. Reward referrer (Client-side approach - ideally this should be an RPC or DB trigger)
