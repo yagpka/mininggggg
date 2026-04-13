@@ -49,7 +49,7 @@
                 <div class="logo-icon">🕹️</div>
                 <div class="logo-text">MINER SWITCH</div>
             </div>
-            <div class="notification-icon">🔔<div class="dot"></div></div>
+            <div class="profile-icon" onclick="switchTab('profile')">👤</div>
         </header>
 
         <!-- Main Content Area -->
@@ -63,7 +63,7 @@
                         <h2>Cloud Miner, <span class="highlight-purple">Pro!</span></h2>
                         <p class="subtitle">A powerful rig generating constant passive income.</p>
                         
-                        <div style="display: flex; gap: 10px; margin-bottom: 24px;">
+                        <div style="display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;">
                             <div class="stat-pill" style="margin-bottom: 0;">
                                 <span class="stat-icon">⚡</span>
                                 <span id="gh-display">0</span> GH Power
@@ -71,6 +71,10 @@
                             <div class="stat-pill streak-pill" style="margin-bottom: 0;">
                                 <span class="stat-icon">🔥</span>
                                 <span id="streak-display">Day 1 (1.0x)</span>
+                            </div>
+                            <div class="stat-pill" style="margin-bottom: 0; background: var(--accent-purple); color: #111;">
+                                <span class="stat-icon">🏆</span>
+                                <span id="rank-display">Novice</span>
                             </div>
                         </div>
 
@@ -340,6 +344,64 @@
                         </div>
                         <div class="pop-out-element">🎯</div>
                     </div>
+
+                    <div class="feature-card minigame-card" style="margin-top: 15px; border: 2px solid var(--accent-red);">
+                        <div class="card-bg-effect" style="background: radial-gradient(circle at center, rgba(255,0,0,0.1) 0%, transparent 70%);"></div>
+                        <div class="card-content">
+                            <h2>Boss <span style="color: var(--accent-red);">Raid</span></h2>
+                            <p class="subtitle">Join all players to defeat the Global Boss for massive token rewards!</p>
+                            <button class="btn btn-action mt-10" style="background: var(--accent-red);" onclick="initBossGame()">Enter Raid ⚔️</button>
+                        </div>
+                        <div class="pop-out-element float-alt" style="font-size: 80px;">👹</div>
+                    </div>
+                </div>
+
+                <div id="boss-game-area" class="hidden">
+                    <div class="game-header">
+                        <button class="btn btn-secondary btn-back" onclick="exitGame()">⬅ Back</button>
+                        <h3>Global Boss Raid</h3>
+                    </div>
+                    <div class="active-game-box" style="padding: 10px;">
+                        <div id="boss-info-container">
+                            <div class="boss-level-badge" id="boss-level-display">Level 1</div>
+                            <div class="boss-visual" id="boss-visual">🪨</div>
+                            
+                            <div class="ability-section" style="width: 100%; margin-top: 10px;">
+                                <div class="ability-info">
+                                    <span>Boss HP (XP)</span>
+                                    <span id="boss-hp-text">100,000 / 100,000</span>
+                                </div>
+                                <div class="progress-bar" style="height: 20px; border-color: var(--accent-red);">
+                                    <div class="fill" id="boss-hp-fill" style="width: 100%; background: var(--accent-red);"></div>
+                                </div>
+                            </div>
+
+                            <div class="stats-row mt-10" style="display: flex; gap: 10px; width: 100%;">
+                                <div class="stat-pill" style="flex: 1; justify-content: center;">
+                                    <span class="stat-icon">⚔️</span>
+                                    <span id="player-boss-damage">0.0</span> Damage
+                                </div>
+                                <div class="stat-pill" style="flex: 1; justify-content: center; background: var(--accent-yellow); color: #111;">
+                                    <span class="stat-icon">👆</span>
+                                    <span id="player-boss-taps">0</span> Taps
+                                </div>
+                            </div>
+
+                            <div class="action-section mt-20" style="width: 100%;">
+                                <button class="btn btn-action" id="btn-boss-attack" style="background: var(--accent-red); height: 80px; font-size: 24px;" onclick="attackBoss()">ATTACK! ⚔️</button>
+                                <button class="btn btn-secondary mt-10" onclick="watchAdForTaps()">Watch Ad (+100 Taps) 📺</button>
+                                <p class="subtitle" style="margin-top: 10px; font-size: 10px;">Each tap deals 0.1 XP damage. Rewards distributed proportionally after defeat.</p>
+                            </div>
+                        </div>
+
+                        <div id="boss-cooldown-container" class="hidden">
+                            <div style="font-size: 60px; margin-bottom: 20px;">⌛</div>
+                            <h2>Boss Defeated!</h2>
+                            <p class="subtitle">A new boss will spawn in:</p>
+                            <div class="massive-balance" id="boss-spawn-timer">00:00</div>
+                            <p class="subtitle mt-10">Rewards have been distributed to your wallet based on your damage contribution.</p>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="game-1-area" class="hidden">
@@ -518,6 +580,79 @@
                                 </div>
                                 <div class="task-status">Joined</div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 6. PROFILE TAB -->
+            <div id="profile-tab" class="tab-content">
+                <div class="feature-card">
+                    <div class="card-content" style="width: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h2 id="profile-name">Miner</h2>
+                                <p class="subtitle" id="profile-rank-label">Novice Miner</p>
+                            </div>
+                            <div style="font-size: 40px;">👤</div>
+                        </div>
+                        
+                        <div class="profile-stats-grid">
+                            <div class="profile-stat-card">
+                                <span class="stat-label">Player ID</span>
+                                <span class="stat-value" id="profile-id">000000</span>
+                            </div>
+                            <div class="profile-stat-card">
+                                <span class="stat-label">Mining Power</span>
+                                <span class="stat-value" id="profile-power">0 GH</span>
+                            </div>
+                            <div class="profile-stat-card">
+                                <span class="stat-label">Tokens</span>
+                                <span class="stat-value" id="profile-tokens">0.00</span>
+                            </div>
+                            <div class="profile-stat-card">
+                                <span class="stat-label">Referrals</span>
+                                <span class="stat-value" id="profile-refs">0</span>
+                            </div>
+                        </div>
+                        
+                        <div class="stat-pill mt-20" style="width: 100%; justify-content: center; background: #fff;">
+                            <span class="stat-icon">🔗</span>
+                            <span id="profile-sol" style="font-size: 10px; word-break: break-all;">None</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Level System -->
+                <div class="feature-card">
+                    <div class="card-content" style="width: 100%;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                            <div style="font-size: 24px;">📈</div>
+                            <div>
+                                <h2 style="margin-bottom: 0;">Mining <span class="highlight-yellow">Levels</span></h2>
+                                <p class="subtitle" style="margin-bottom: 0;">Unlock rewards as you grow!</p>
+                            </div>
+                        </div>
+                        
+                        <div id="level-list" style="display: flex; flex-direction: column; gap: 12px;">
+                            <!-- Levels will be injected here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Achievements -->
+                <div class="feature-card">
+                    <div class="card-content" style="width: 100%;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                            <div style="font-size: 24px;">🏆</div>
+                            <div>
+                                <h2 style="margin-bottom: 0;">Special <span class="highlight-cyan">Achievements</span></h2>
+                                <p class="subtitle" style="margin-bottom: 0;">Permanent boosts for your rig.</p>
+                            </div>
+                        </div>
+                        
+                        <div id="achievement-list" style="display: flex; flex-direction: column; gap: 12px;">
+                            <!-- Achievements will be injected here -->
                         </div>
                     </div>
                 </div>

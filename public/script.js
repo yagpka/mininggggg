@@ -68,6 +68,26 @@ const COINS_PER_1_GH_PER_DAY = 1;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MAX_HEAT_MS = 4 * 60 * 60 * 1000; // 4 Hours until overheat
 
+const LEVELS = [
+    { id: 1, req: 1000, reward: { type: 'tokens', amount: 1000 }, label: "Level 1: 1k Coins" },
+    { id: 2, req: 10000, reward: { type: 'tokens', amount: 5000 }, label: "Level 2: 10k Coins" },
+    { id: 3, req: 50000, reward: { type: 'tokens', amount: 10000 }, label: "Level 3: 50k Coins" },
+    { id: 4, req: 100000, reward: { type: 'mult', amount: 0.5 }, label: "Level 4: 100k Coins" },
+    { id: 5, req: 250000, reward: { type: 'tokens', amount: 50000 }, label: "Level 5: 250k Coins" },
+    { id: 6, req: 1000000, reward: { type: 'mult', amount: 2.0 }, label: "Level 6: 1M Coins" },
+    { id: 7, req: 2000000, reward: { type: 'tokens', amount: 100000 }, label: "Level 7: 2M Coins" },
+    { id: 8, req: 5000000, reward: { type: 'tokens', amount: 250000 }, label: "Level 8: 5M Coins" },
+    { id: 9, req: 10000000, reward: { type: 'tokens', amount: 500000 }, label: "Level 9: 10M Coins" },
+    { id: 10, req: 20000000, reward: { type: 'tokens', amount: 1000000 }, label: "Level 10: 20M Coins" }
+];
+
+const ACHIEVEMENTS = [
+    { id: 'power_10k', req: { type: 'gh', value: 10000 }, reward: { type: 'gh', amount: 1000 }, label: "10k GH Power" },
+    { id: 'refs_25', req: { type: 'refs', value: 25 }, reward: { type: 'gh', amount: 2000 }, label: "25 Referrals" },
+    { id: 'coins_500k', req: { type: 'coins', value: 500000 }, reward: { type: 'tokens', amount: 50000 }, label: "500k Coins" },
+    { id: 'mult_2x', req: { type: 'mult', value: 2.0 }, reward: { type: 'mult', amount: 0.5 }, label: "2x Active Multiplier" }
+];
+
 let globalStats = {
     totalPlayers: 0,
     totalPower: 0,
@@ -83,8 +103,22 @@ let state = {
     streakDays: 1, lastLoginDate: "", completedTasks: [],
     socialHistory: [], // Added to store their submission history    
     lastBoxOpenTime: 0,
-    activeMultipliers: [] // { factor: 2, endTime: timestamp, label: "2x (10m)" }
+    activeMultipliers: [], // { factor: 2, endTime: timestamp, label: "2x (10m)" }
+    claimedLevels: [],
+    claimedAchievements: [],
+    permanentMultiplier: 1.0,
+    referralCount: 0,
+    bossTaps: 0,
+    bossDamage: 0
 };
+
+const BOSS_LEVELS = [
+    { level: 1, hp: 100000, reward: 100000, emoji: "🪨" },
+    { level: 2, hp: 500000, reward: 500000, emoji: "🪵" },
+    { level: 3, hp: 1000000, reward: 1000000, emoji: "💎" },
+    { level: 4, hp: 2000000, reward: 2000000, emoji: "🌋" },
+    { level: 5, hp: 5000000, reward: 5000000, emoji: "👹" }
+];
 
 // ==========================================
 // 5. DB FETCH & SAVE SYSTEM
@@ -133,6 +167,10 @@ async function loadGameData() {
             state.completedTasks = dbState.completed_tasks || [];
             state.lastBoxOpenTime = Number(dbState.last_box_open_time) || 0;
             state.activeMultipliers = dbState.active_multipliers || [];
+            state.claimedLevels = dbState.claimed_levels || [];
+            state.claimedAchievements = dbState.claimed_achievements || [];
+            state.permanentMultiplier = Number(dbState.permanent_multiplier) || 1.0;
+            state.bossTaps = Number(dbState.boss_taps) || 0;
         }
 
         // 2. Fetch Social Submission History
@@ -208,7 +246,10 @@ async function forceSaveToDB() {
             last_calc_time: state.lastCalcTime, 
             completed_tasks: state.completedTasks,
             last_box_open_time: state.lastBoxOpenTime,
-            active_multipliers: state.activeMultipliers
+            active_multipliers: state.activeMultipliers,
+            claimed_levels: state.claimedLevels,
+            claimed_achievements: state.claimedAchievements,
+            permanent_multiplier: state.permanentMultiplier
         }).eq('telegram_id', tgUser.id);
     } catch (err) {
         console.error("Save error:", err);
@@ -324,6 +365,16 @@ function updateUI() {
     const tempMultiplier = getCurrentMultiplier();
     const totalMultiplier = streakMultiplier * tempMultiplier;
 
+    const currentLevel = state.claimedLevels.length > 0 ? Math.max(...state.claimedLevels) : 0;
+    let rank = "Novice";
+    if (currentLevel >= 1) rank = "Bronze";
+    if (currentLevel >= 3) rank = "Silver";
+    if (currentLevel >= 5) rank = "Gold";
+    if (currentLevel >= 7) rank = "Platinum";
+    if (currentLevel >= 9) rank = "Diamond";
+    if (currentLevel >= 10) rank = "Master";
+    document.getElementById('rank-display').innerText = rank;
+
     els.streak.innerText = `Day ${state.streakDays} (${streakMultiplier.toFixed(1)}x)`;
     if (tempMultiplier > 1) {
         els.streak.innerText += ` + ⚡ ${tempMultiplier.toFixed(1)}x Bonus`;
@@ -414,8 +465,19 @@ function switchTab(tabId) {
     haptic('light');
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.bottom-nav .nav-item').forEach(t => t.classList.remove('active'));
-    document.getElementById(`${tabId}-tab`).classList.add('active');
-    event.currentTarget.classList.add('active');
+    
+    const tab = document.getElementById(`${tabId}-tab`);
+    if (tab) tab.classList.add('active');
+    
+    // Find matching nav item
+    const navItems = document.querySelectorAll('.bottom-nav .nav-item');
+    navItems.forEach(item => {
+        if (item.getAttribute('onclick').includes(`'${tabId}'`)) {
+            item.classList.add('active');
+        }
+    });
+
+    if (tabId === 'profile') updateProfileUI();
 }
 
 function switchSubTab(tabId) {
@@ -568,7 +630,7 @@ function closePowerLeaderboard() {
 function getCurrentMultiplier() {
     const now = Date.now();
     state.activeMultipliers = (state.activeMultipliers || []).filter(m => m.endTime > now);
-    let totalMult = 1.0;
+    let totalMult = state.permanentMultiplier || 1.0;
     state.activeMultipliers.forEach(m => {
         totalMult *= m.factor;
     });
@@ -690,6 +752,135 @@ function grantBoxReward() {
 function closeRewardResultModal() {
     const modal = document.getElementById('reward-result-modal');
     if (modal) modal.classList.add('hidden');
+}
+
+// ==========================================
+// 13. PROFILE, LEVELS & ACHIEVEMENTS
+// ==========================================
+
+function updateProfileUI() {
+    const currentLevel = state.claimedLevels.length > 0 ? Math.max(...state.claimedLevels) : 0;
+    let rank = "Novice Miner";
+    if (currentLevel >= 1) rank = "Bronze Miner";
+    if (currentLevel >= 3) rank = "Silver Miner";
+    if (currentLevel >= 5) rank = "Gold Miner";
+    if (currentLevel >= 7) rank = "Platinum Miner";
+    if (currentLevel >= 9) rank = "Diamond Miner";
+    if (currentLevel >= 10) rank = "Master Miner";
+
+    document.getElementById('profile-name').innerText = tgUser.first_name || "Miner";
+    document.getElementById('profile-rank-label').innerText = rank;
+    document.getElementById('profile-id').innerText = tgUser.id;
+    document.getElementById('profile-power').innerText = state.gh;
+    document.getElementById('profile-tokens').innerText = state.walletCoins.toFixed(2);
+    document.getElementById('profile-refs').innerText = state.referralCount || 0;
+    document.getElementById('profile-sol').innerText = state.solAddress || "None";
+
+    renderLevels();
+    renderAchievements();
+}
+
+function renderLevels() {
+    const list = document.getElementById('level-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    LEVELS.forEach(lvl => {
+        const isClaimed = state.claimedLevels.includes(lvl.id);
+        const canClaim = state.walletCoins >= lvl.req && !isClaimed;
+        
+        const item = document.createElement('div');
+        item.className = 'level-card';
+        item.innerHTML = `
+            <div class="item-info">
+                <span class="item-title">${lvl.label}</span>
+                <span class="item-reward">Reward: ${lvl.reward.type === 'tokens' ? lvl.reward.amount + ' 🪙' : '+' + lvl.reward.amount + 'x Mult'}</span>
+            </div>
+            <button class="btn ${isClaimed ? 'btn-disabled' : (canClaim ? 'btn-primary' : 'btn-secondary')}" 
+                    style="width: auto; padding: 8px 15px; font-size: 11px; flex: none;"
+                    onclick="claimLevel(${lvl.id})" ${(!canClaim || isClaimed) ? 'disabled' : ''}>
+                ${isClaimed ? 'Claimed ✅' : (canClaim ? 'Claim 🎁' : 'Locked 🔒')}
+            </button>
+        `;
+        list.appendChild(item);
+    });
+}
+
+function renderAchievements() {
+    const list = document.getElementById('achievement-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    ACHIEVEMENTS.forEach(ach => {
+        const isClaimed = state.claimedAchievements.includes(ach.id);
+        let currentVal = 0;
+        if (ach.req.type === 'gh') currentVal = state.gh;
+        if (ach.req.type === 'refs') currentVal = state.referralCount || 0;
+        if (ach.req.type === 'coins') currentVal = state.walletCoins;
+        if (ach.req.type === 'mult') currentVal = getCurrentMultiplier();
+
+        const canClaim = currentVal >= ach.req.value && !isClaimed;
+
+        const item = document.createElement('div');
+        item.className = 'achievement-card';
+        item.innerHTML = `
+            <div class="item-info">
+                <span class="item-title">${ach.label}</span>
+                <span class="item-reward">Reward: ${ach.reward.type === 'gh' ? '+' + ach.reward.amount + ' GH' : (ach.reward.type === 'tokens' ? ach.reward.amount + ' 🪙' : '+' + ach.reward.amount + 'x Mult')}</span>
+            </div>
+            <button class="btn ${isClaimed ? 'btn-disabled' : (canClaim ? 'btn-primary' : 'btn-secondary')}" 
+                    style="width: auto; padding: 8px 15px; font-size: 11px; flex: none;"
+                    onclick="claimAchievement('${ach.id}')" ${(!canClaim || isClaimed) ? 'disabled' : ''}>
+                ${isClaimed ? 'Done ✅' : (canClaim ? 'Claim 🎁' : 'Locked 🔒')}
+            </button>
+        `;
+        list.appendChild(item);
+    });
+}
+
+async function claimLevel(lvlId) {
+    const lvl = LEVELS.find(l => l.id === lvlId);
+    if (!lvl || state.walletCoins < lvl.req || state.claimedLevels.includes(lvlId)) return;
+
+    haptic('success');
+    state.claimedLevels.push(lvlId);
+    
+    if (lvl.reward.type === 'tokens') {
+        state.walletCoins += lvl.reward.amount;
+        await supabaseClient.from('players').update({ wallet_coins: state.walletCoins }).eq('telegram_id', tgUser.id);
+    } else if (lvl.reward.type === 'mult') {
+        state.permanentMultiplier += lvl.reward.amount;
+    }
+
+    forceSaveToDB();
+    updateProfileUI();
+    updateUI();
+    appAlert(`Level ${lvlId} Reward Claimed! 🚀`);
+}
+
+async function claimAchievement(achId) {
+    const ach = ACHIEVEMENTS.find(a => a.id === achId);
+    if (!ach || state.claimedAchievements.includes(achId)) return;
+
+    haptic('success');
+    state.claimedAchievements.push(achId);
+
+    if (ach.reward.type === 'gh') {
+        // Use RPC for power reward
+        await supabaseClient.rpc('secure_ad_reward', { p_telegram_id: tgUser.id, p_amount: ach.reward.amount });
+        // Update local state (though it will sync on next load)
+        state.gh += ach.reward.amount;
+    } else if (ach.reward.type === 'tokens') {
+        state.walletCoins += ach.reward.amount;
+        await supabaseClient.from('players').update({ wallet_coins: state.walletCoins }).eq('telegram_id', tgUser.id);
+    } else if (ach.reward.type === 'mult') {
+        state.permanentMultiplier += ach.reward.amount;
+    }
+
+    forceSaveToDB();
+    updateProfileUI();
+    updateUI();
+    appAlert(`Achievement "${ach.label}" Claimed! 🏆`);
 }
 
 function copyTemplate() {
@@ -939,7 +1130,12 @@ const game1Area = document.getElementById('game-1-area');
 const game2Area = document.getElementById('game-2-area');
 
 function exitGame() {
-    haptic('light'); game1Area.classList.add('hidden'); game2Area.classList.add('hidden'); gameMenu.classList.remove('hidden');
+    haptic('light'); 
+    if (bossPollInterval) clearInterval(bossPollInterval);
+    game1Area.classList.add('hidden'); 
+    game2Area.classList.add('hidden'); 
+    document.getElementById('boss-game-area').classList.add('hidden');
+    gameMenu.classList.remove('hidden');
 }
 
 function deductLife() {
@@ -1123,6 +1319,7 @@ async function loadReferralHistory() {
             .order('created_at', { ascending: false });
 
         if (error) throw error;
+        state.referralCount = data ? data.length : 0;
 
         const listEl = document.getElementById('referral-history-list');
         if (!listEl) return;
@@ -1269,4 +1466,255 @@ function shareInviteLink() {
 
 // Call this to set the link initially
 setTimeout(updateInviteLink, 1000);
+
+// ==========================================
+// 14. BOSS RAID SYSTEM
+// ==========================================
+let currentBoss = null;
+let bossPollInterval = null;
+
+async function initBossGame() {
+    haptic('medium');
+    document.getElementById('game-menu').classList.add('hidden');
+    document.getElementById('boss-game-area').classList.remove('hidden');
+    
+    await fetchBossData();
+    if (bossPollInterval) clearInterval(bossPollInterval);
+    bossPollInterval = setInterval(fetchBossData, 3000); // Poll every 3s for HP updates
+}
+
+async function fetchBossData() {
+    try {
+        // 1. Get active boss
+        const { data: bossData, error: bossError } = await supabaseClient
+            .from('boss_events')
+            .select('*')
+            .eq('status', 'active')
+            .limit(1)
+            .maybeSingle();
+
+        if (bossError) throw bossError;
+
+        if (bossData) {
+            currentBoss = bossData;
+            document.getElementById('boss-info-container').classList.remove('hidden');
+            document.getElementById('boss-cooldown-container').classList.add('hidden');
+            
+            // 2. Get player contribution
+            const { data: contribData } = await supabaseClient
+                .from('boss_contributions')
+                .select('damage_dealt')
+                .eq('boss_id', bossData.id)
+                .eq('player_id', tgUser.id)
+                .maybeSingle();
+            
+            state.bossDamage = contribData ? Number(contribData.damage_dealt) : 0;
+            updateBossUI();
+        } else {
+            // No active boss, check for cooldown
+            currentBoss = null;
+            document.getElementById('boss-info-container').classList.add('hidden');
+            document.getElementById('boss-cooldown-container').classList.remove('hidden');
+            
+            // Check when next boss spawns
+            const { data: lastBoss } = await supabaseClient
+                .from('boss_events')
+                .select('defeated_at')
+                .eq('status', 'defeated')
+                .order('defeated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            
+            if (lastBoss) {
+                const nextSpawn = new Date(lastBoss.defeated_at).getTime() + (60 * 60 * 1000);
+                const now = Date.now();
+                if (now >= nextSpawn) {
+                    await spawnNewBoss();
+                } else {
+                    updateSpawnTimer(nextSpawn);
+                }
+            } else {
+                // First time ever? Spawn Level 1
+                await spawnNewBoss();
+            }
+        }
+    } catch (err) {
+        console.error("Boss fetch error:", err);
+    }
+}
+
+function updateBossUI() {
+    if (!currentBoss) return;
+    
+    const hpPercent = (currentBoss.current_hp / currentBoss.max_hp) * 100;
+    document.getElementById('boss-hp-fill').style.width = `${hpPercent}%`;
+    document.getElementById('boss-hp-text').innerText = `${Math.ceil(currentBoss.current_hp).toLocaleString()} / ${currentBoss.max_hp.toLocaleString()}`;
+    document.getElementById('boss-level-display').innerText = `Level ${currentBoss.level}`;
+    document.getElementById('boss-visual').innerText = BOSS_LEVELS[currentBoss.level - 1]?.emoji || "👹";
+    document.getElementById('player-boss-damage').innerText = state.bossDamage.toFixed(1);
+    document.getElementById('player-boss-taps').innerText = state.bossTaps;
+}
+
+function updateSpawnTimer(nextSpawn) {
+    const now = Date.now();
+    const diff = nextSpawn - now;
+    if (diff <= 0) {
+        document.getElementById('boss-spawn-timer').innerText = "00:00";
+        fetchBossData();
+        return;
+    }
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    document.getElementById('boss-spawn-timer').innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+async function attackBoss() {
+    if (!currentBoss || state.bossTaps <= 0) {
+        if (state.bossTaps <= 0) appAlert("You need Taps to attack! Watch an ad to get 100 Taps.");
+        return;
+    }
+
+    haptic('light');
+    const damage = 0.1;
+    
+    // Visual feedback
+    const visual = document.getElementById('boss-visual');
+    visual.classList.remove('boss-hit-anim');
+    void visual.offsetWidth; // Trigger reflow
+    visual.classList.add('boss-hit-anim');
+
+    state.bossTaps--;
+    state.bossDamage += damage;
+    updateBossUI();
+
+    try {
+        // 1. Update Boss HP
+        const newHp = Math.max(0, currentBoss.current_hp - damage);
+        const { error: hpError } = await supabaseClient
+            .from('boss_events')
+            .update({ 
+                current_hp: newHp,
+                status: newHp <= 0 ? 'defeated' : 'active',
+                defeated_at: newHp <= 0 ? new Date().toISOString() : null
+            })
+            .eq('id', currentBoss.id);
+
+        if (hpError) throw hpError;
+
+        // 2. Update Contribution
+        const { data: existingContrib } = await supabaseClient
+            .from('boss_contributions')
+            .select('id, damage_dealt')
+            .eq('boss_id', currentBoss.id)
+            .eq('player_id', tgUser.id)
+            .maybeSingle();
+
+        if (existingContrib) {
+            await supabaseClient
+                .from('boss_contributions')
+                .update({ damage_dealt: Number(existingContrib.damage_dealt) + damage })
+                .eq('id', existingContrib.id);
+        } else {
+            await supabaseClient
+                .from('boss_contributions')
+                .insert({ boss_id: currentBoss.id, player_id: tgUser.id, damage_dealt: damage });
+        }
+
+        // 3. Update Player Taps
+        await supabaseClient.from('players').update({ boss_taps: state.bossTaps }).eq('telegram_id', tgUser.id);
+
+        if (newHp <= 0) {
+            appAlert("VICTORY! The boss has been defeated!");
+            await distributeBossRewards(currentBoss);
+            fetchBossData();
+        }
+    } catch (err) {
+        console.error("Attack error:", err);
+    }
+}
+
+async function distributeBossRewards(boss) {
+    try {
+        // Get all contributions for this boss
+        const { data: contribs } = await supabaseClient
+            .from('boss_contributions')
+            .select('player_id, damage_dealt')
+            .eq('boss_id', boss.id);
+        
+        if (!contribs) return;
+
+        for (const c of contribs) {
+            const share = Number(c.damage_dealt) / boss.max_hp;
+            const reward = Math.floor(boss.reward_tokens * share);
+            
+            if (reward > 0) {
+                const { data: pData } = await supabaseClient
+                    .from('players')
+                    .select('wallet_coins')
+                    .eq('telegram_id', c.player_id)
+                    .maybeSingle();
+                
+                if (pData) {
+                    await supabaseClient
+                        .from('players')
+                        .update({ wallet_coins: Number(pData.wallet_coins) + reward })
+                        .eq('telegram_id', c.player_id);
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Reward distribution error:", err);
+    }
+}
+
+function watchAdForTaps() {
+    if (adBlockMining) {
+        appAlert("Loading ad for 100 Taps... 📺");
+        adBlockMining.show().then(() => {
+            grantTaps();
+        }).catch((err) => {
+            console.error("Ad error:", err);
+            appAlert("Ad failed to load. Try again later.");
+        });
+    } else {
+        grantTaps();
+    }
+}
+
+async function grantTaps() {
+    state.bossTaps += 100;
+    await supabaseClient.from('players').update({ boss_taps: state.bossTaps }).eq('telegram_id', tgUser.id);
+    updateBossUI();
+    appAlert("Success! +100 Taps granted. ⚔️");
+}
+
+async function spawnNewBoss() {
+    try {
+        const { data: lastBoss } = await supabaseClient
+            .from('boss_events')
+            .select('level')
+            .order('id', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        
+        let nextLevel = 1;
+        if (lastBoss) {
+            nextLevel = (lastBoss.level % 5) + 1;
+        }
+        
+        const config = BOSS_LEVELS[nextLevel - 1];
+        
+        await supabaseClient.from('boss_events').insert({
+            level: nextLevel,
+            max_hp: config.hp,
+            current_hp: config.hp,
+            reward_tokens: config.reward,
+            status: 'active'
+        });
+        
+        fetchBossData();
+    } catch (err) {
+        console.error("Spawn error:", err);
+    }
+}
 

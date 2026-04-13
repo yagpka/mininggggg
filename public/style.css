@@ -140,6 +140,85 @@ body {
     box-shadow: 2px 2px 0px #111;
 }
 
+.profile-icon {
+    font-size: 24px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+.profile-icon:active { transform: scale(0.9); }
+
+/* Profile Dashboard Styles */
+.profile-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.profile-stat-card {
+    background: var(--bg-light);
+    border: 2px solid var(--card-border);
+    border-radius: 16px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    box-shadow: var(--shadow-sm);
+}
+
+.profile-stat-card .stat-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.profile-stat-card .stat-value {
+    font-size: 16px;
+    font-weight: 900;
+    color: var(--text-main);
+    font-family: 'Fredoka One', cursive !important;
+}
+
+.level-card, .achievement-card {
+    background: #fff;
+    border: 2px solid var(--card-border);
+    border-radius: 16px;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s;
+}
+
+.level-card:hover, .achievement-card:hover {
+    transform: translateY(-2px);
+}
+
+.item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.item-title {
+    font-size: 14px;
+    font-weight: 900;
+    color: var(--text-main);
+}
+
+.item-reward {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--accent-cyan);
+}
+
+.item-status-icon {
+    font-size: 20px;
+}
+
 #app-container {
     display: flex;
     flex-direction: column;
@@ -209,6 +288,60 @@ body {
 }
 
 /* Main Content Area */
+/* Boss Raid Styles */
+.boss-level-badge {
+    background: var(--accent-red);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    border: 2px solid #111;
+    box-shadow: 2px 2px 0px #111;
+    margin-bottom: 10px;
+}
+
+.boss-visual {
+    font-size: 100px;
+    margin: 20px 0;
+    filter: drop-shadow(5px 5px 0px #111);
+    animation: bossShake 0.5s infinite alternate ease-in-out;
+}
+
+@keyframes bossShake {
+    0% { transform: scale(1) rotate(-2deg); }
+    100% { transform: scale(1.05) rotate(2deg); }
+}
+
+.boss-hit-anim {
+    animation: bossHit 0.2s ease-out;
+}
+
+@keyframes bossHit {
+    0% { transform: scale(1.2); filter: brightness(2); }
+    100% { transform: scale(1); filter: brightness(1); }
+}
+
+#boss-game-area .active-game-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+}
+
+#boss-info-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#boss-cooldown-container {
+    text-align: center;
+}
+
 #main-content {
     flex: 1; 
     overflow-y: auto; 
