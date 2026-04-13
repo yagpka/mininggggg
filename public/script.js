@@ -413,15 +413,6 @@ function updateUI() {
     els.globalPlayers.innerText = globalStats.totalPlayers.toLocaleString(); 
     els.globalPower.innerText = globalStats.totalPower.toLocaleString() + " GH";
     
-    // Update Phase 2 Progress
-    const phase2Goal = 100;
-    const phase2Current = Math.min(globalStats.totalPlayers, phase2Goal);
-    const phase2Percent = (phase2Current / phase2Goal) * 100;
-    const p2Text = document.getElementById('phase2-progress-text');
-    const p2Fill = document.getElementById('phase2-progress-fill');
-    if (p2Text) p2Text.innerText = `${phase2Current} / ${phase2Goal}`;
-    if (p2Fill) p2Fill.style.width = `${phase2Percent}%`;
-    
     if (globalStats.totalMined >= TOTAL_POOL) {
         els.btnWithdraw.className = "btn btn-action";
         els.withdrawStatusText.innerText = "Withdrawals Open!";
