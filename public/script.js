@@ -1136,6 +1136,10 @@ function exitGame() {
     syncBossData(); // Final sync before leaving
     if (bossPollInterval) clearInterval(bossPollInterval);
     if (bossSyncInterval) clearInterval(bossSyncInterval);
+    if (bossSubscription) {
+        supabaseClient.removeChannel(bossSubscription);
+        bossSubscription = null;
+    }
     game1Area.classList.add('hidden'); 
     game2Area.classList.add('hidden'); 
     document.getElementById('boss-game-area').classList.add('hidden');
@@ -1477,6 +1481,7 @@ setTimeout(updateInviteLink, 1000);
 let currentBoss = null;
 let bossPollInterval = null;
 let bossSyncInterval = null;
+let bossSubscription = null;
 
 async function initBossGame() {
     haptic('medium');
@@ -1487,8 +1492,21 @@ async function initBossGame() {
     state.pendingBossTaps = 0;
     
     await fetchBossData();
+
+    // Real-time updates for immediate feedback to all players
+    if (bossSubscription) supabaseClient.removeChannel(bossSubscription);
+    bossSubscription = supabaseClient
+        .channel('boss_events_realtime')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'boss_events' }, payload => {
+            if (currentBoss && payload.new.id === currentBoss.id) {
+                currentBoss = payload.new;
+                updateBossUI();
+            }
+        })
+        .subscribe();
+
     if (bossPollInterval) clearInterval(bossPollInterval);
-    bossPollInterval = setInterval(fetchBossData, 3000); // Poll every 3s for HP updates
+    bossPollInterval = setInterval(fetchBossData, 5000); // Poll every 5s as fallback
     
     if (bossSyncInterval) clearInterval(bossSyncInterval);
     bossSyncInterval = setInterval(syncBossData, 5000); // Sync every 5s
