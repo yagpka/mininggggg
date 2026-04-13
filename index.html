@@ -99,6 +99,12 @@
                                 </div>
                                 <div class="progress-bar"><div class="fill fill-cyan" id="pool-fill" style="width: 100%;"></div></div>
                             </div>
+
+                            <!-- Active Multipliers -->
+                            <div id="active-multipliers-container" class="mt-10 hidden" style="background: rgba(0,0,0,0.05); padding: 8px; border-radius: 8px; border: 1px dashed var(--card-border);">
+                                <div style="font-size: 10px; font-weight: 800; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase;">Active Bonuses</div>
+                                <div id="active-multipliers-list" style="display: flex; gap: 5px; flex-wrap: wrap;"></div>
+                            </div>
                         </div>
                     </div>
                     
@@ -140,8 +146,14 @@
                                 <path d="M 65 55 L 55 58" stroke="#1A1008" stroke-width="5" stroke-linecap="round"/>
                             </svg>
                         </div>
-                        <div class="miner-pickaxe">⛏️</div>
-                    </div>
+                    <div class="miner-pickaxe">⛏️</div>
+                </div>
+
+                <!-- Floating Reward Box -->
+                <div id="reward-box" class="floating-box" onclick="openRewardBox()">
+                    <div class="box-icon">🎁</div>
+                    <div class="box-timer hidden" id="box-timer">30:00</div>
+                </div>
                 </div>
 
                 <div class="action-section">
@@ -155,7 +167,7 @@
                     
                     <div class="button-group">
                         <button class="btn btn-disabled" id="btn-claim" onclick="claimCoins()">Need 1 Coin ⏳</button>
-                        <button class="btn btn-secondary" onclick="watchAd('mining')">Watch Ad (+10 GH) 📺</button>
+                        <button class="btn btn-secondary" id="btn-watch-ad-mining" onclick="watchAd('mining')">Watch Ad (+10 GH) 📺</button>
                     </div>
                 </div>
 
@@ -306,7 +318,7 @@
                             <span class="stat-icon">❤️</span>
                             <span id="lives-display">0</span> Lives
                         </div>
-                        <button class="btn btn-secondary" style="width: auto; padding: 10px 15px;" onclick="watchAd('lives')">+5 Lives 📺</button>
+                        <button class="btn btn-secondary" id="btn-watch-ad-lives" style="width: auto; padding: 10px 15px;" onclick="watchAd('lives')">+5 Lives 📺</button>
                     </div>
 
                     <div class="feature-card minigame-card">
@@ -613,6 +625,16 @@
                     <p style="text-align:center; color:var(--text-muted); font-size:12px;">Loading leaderboard...</p>
                 </div>
                 <button class="btn btn-secondary" onclick="closeReferralLeaderboard()">Close</button>
+            </div>
+        </div>
+
+        <!-- Reward Result Modal -->
+        <div id="reward-result-modal" class="modal hidden">
+            <div class="modal-card">
+                <div id="reward-icon" style="font-size: 60px; filter: drop-shadow(4px 4px 0px #111);">🎁</div>
+                <h2 id="reward-title" style="margin-top: 10px;">Reward Obtained!</h2>
+                <p id="reward-description" class="subtitle" style="margin: 10px 0 20px 0;">You got a special bonus!</p>
+                <button class="btn btn-primary" onclick="closeRewardResultModal()">Awesome! 🚀</button>
             </div>
         </div>
 

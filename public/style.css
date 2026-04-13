@@ -85,6 +85,61 @@ body {
     50% { transform: translateY(15px) rotate(-15deg) scale(1.1); }
 }
 
+/* Floating Reward Box */
+.floating-box {
+    position: absolute;
+    top: 40px;
+    right: 15px;
+    width: 65px;
+    height: 65px;
+    background: var(--accent-yellow);
+    border: 3px solid #111;
+    border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 4px 4px 0px #111;
+    z-index: 100; /* Ensure it's above everything */
+    animation: bounce 2s infinite ease-in-out;
+    transition: transform 0.2s;
+    pointer-events: auto !important; /* Force clickability */
+}
+.floating-box:active {
+    transform: scale(0.9);
+}
+.floating-box .box-icon {
+    font-size: 30px;
+}
+.floating-box .box-timer {
+    font-size: 10px;
+    font-weight: 800;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 2px 4px;
+    border-radius: 4px;
+    margin-top: -5px;
+}
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+.multiplier-badge {
+    background: var(--accent-purple);
+    color: #111;
+    border: 2px solid #111;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 2px 2px 0px #111;
+}
+
 #app-container {
     display: flex;
     flex-direction: column;

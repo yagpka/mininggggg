@@ -81,7 +81,9 @@ let state = {
     gh: 0, pendingCoins: 0, walletCoins: 0, totalMinedFromPool: 0,
     lives: 0, solAddress: "", lastCalcTime: Date.now(), heatMs: 0,               
     streakDays: 1, lastLoginDate: "", completedTasks: [],
-    socialHistory: [] // Added to store their submission history    
+    socialHistory: [], // Added to store their submission history    
+    lastBoxOpenTime: 0,
+    activeMultipliers: [] // { factor: 2, endTime: timestamp, label: "2x (10m)" }
 };
 
 // ==========================================
@@ -129,6 +131,8 @@ async function loadGameData() {
             state.heatMs = Number(dbState.heat_ms) || 0;
             state.lastCalcTime = Number(dbState.last_calc_time) || Date.now();
             state.completedTasks = dbState.completed_tasks || [];
+            state.lastBoxOpenTime = Number(dbState.last_box_open_time) || 0;
+            state.activeMultipliers = dbState.active_multipliers || [];
         }
 
         // 2. Fetch Social Submission History
@@ -202,7 +206,9 @@ async function forceSaveToDB() {
             last_login_date: state.lastLoginDate, 
             heat_ms: state.heatMs,
             last_calc_time: state.lastCalcTime, 
-            completed_tasks: state.completedTasks
+            completed_tasks: state.completedTasks,
+            last_box_open_time: state.lastBoxOpenTime,
+            active_multipliers: state.activeMultipliers
         }).eq('telegram_id', tgUser.id);
     } catch (err) {
         console.error("Save error:", err);
@@ -220,9 +226,12 @@ function processOfflineProgress() {
         const timeUntilOverheat = MAX_HEAT_MS - state.heatMs;
         const effectiveMiningTime = Math.max(0, Math.min(timeDiff, timeUntilOverheat));
         
-        const multiplier = 1.0 + Math.min(0.5, (state.streakDays - 1) * 0.1);
+        const streakMultiplier = 1.0 + Math.min(0.5, (state.streakDays - 1) * 0.1);
+        const tempMultiplier = getCurrentMultiplier();
+        const totalMultiplier = streakMultiplier * tempMultiplier;
+
         const baseGen = (state.gh * COINS_PER_1_GH_PER_DAY) * (effectiveMiningTime / MS_PER_DAY);
-        const coinsGenerated = baseGen * multiplier;
+        const coinsGenerated = baseGen * totalMultiplier;
 
         state.pendingCoins += coinsGenerated;
         state.totalMinedFromPool += coinsGenerated; 
@@ -275,9 +284,12 @@ function gameLoop() {
     
     if (globalStats.totalMined < TOTAL_POOL && state.gh > 0 && timeDiff > 0) {
         if (state.heatMs < MAX_HEAT_MS) {
-            const multiplier = 1.0 + Math.min(0.5, (state.streakDays - 1) * 0.1);
+            const streakMultiplier = 1.0 + Math.min(0.5, (state.streakDays - 1) * 0.1);
+            const tempMultiplier = getCurrentMultiplier();
+            const totalMultiplier = streakMultiplier * tempMultiplier;
+
             const baseGenerated = (state.gh * COINS_PER_1_GH_PER_DAY) * (timeDiff / MS_PER_DAY);
-            const coinsGenerated = baseGenerated * multiplier;
+            const coinsGenerated = baseGenerated * totalMultiplier;
             
             state.pendingCoins += coinsGenerated;
             state.totalMinedFromPool += coinsGenerated;
@@ -292,6 +304,7 @@ function gameLoop() {
     state.lastCalcTime = now;
     saveState(); 
     updateUI();
+    updateBoxUI();
     requestAnimationFrame(gameLoop);
 }
 
@@ -307,9 +320,15 @@ function updateUI() {
     els.lives.innerText = state.lives;
     els.solDisplay.innerText = state.solAddress || "None";
 
-    const multiplier = 1.0 + Math.min(0.5, (state.streakDays - 1) * 0.1);
-    els.streak.innerText = `Day ${state.streakDays} (${multiplier.toFixed(1)}x)`;
-    els.dailyGen.innerText = (state.gh * COINS_PER_1_GH_PER_DAY * multiplier).toFixed(2);
+    const streakMultiplier = 1.0 + Math.min(0.5, (state.streakDays - 1) * 0.1);
+    const tempMultiplier = getCurrentMultiplier();
+    const totalMultiplier = streakMultiplier * tempMultiplier;
+
+    els.streak.innerText = `Day ${state.streakDays} (${streakMultiplier.toFixed(1)}x)`;
+    if (tempMultiplier > 1) {
+        els.streak.innerText += ` + ⚡ ${tempMultiplier.toFixed(1)}x Bonus`;
+    }
+    els.dailyGen.innerText = (state.gh * COINS_PER_1_GH_PER_DAY * totalMultiplier).toFixed(2);
 
     const heatPercent = Math.min(100, (state.heatMs / MAX_HEAT_MS) * 100);
     els.heatPercent.innerText = heatPercent.toFixed(0) + "%";
@@ -542,6 +561,137 @@ function closePowerLeaderboard() {
     if (modal) modal.classList.add('hidden');
 }
 
+// ==========================================
+// 12. FLOATING REWARD BOX & MULTIPLIERS
+// ==========================================
+
+function getCurrentMultiplier() {
+    const now = Date.now();
+    state.activeMultipliers = (state.activeMultipliers || []).filter(m => m.endTime > now);
+    let totalMult = 1.0;
+    state.activeMultipliers.forEach(m => {
+        totalMult *= m.factor;
+    });
+    return totalMult;
+}
+
+function updateBoxUI() {
+    const box = document.getElementById('reward-box');
+    const timer = document.getElementById('box-timer');
+    if (!box || !timer) return;
+
+    const now = Date.now();
+    const cooldown = 30 * 60 * 1000; // 30 minutes
+    const timePassed = now - state.lastBoxOpenTime;
+    
+    if (timePassed < cooldown) {
+        box.style.opacity = "0.6";
+        box.style.filter = "grayscale(1)";
+        timer.classList.remove('hidden');
+        const remaining = cooldown - timePassed;
+        const mins = Math.floor(remaining / 60000);
+        const secs = Math.floor((remaining % 60000) / 1000);
+        timer.innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
+    } else {
+        box.style.opacity = "1";
+        box.style.filter = "none";
+        timer.classList.add('hidden');
+    }
+    
+    // Update Multiplier Badges
+    const list = document.getElementById('active-multipliers-list');
+    const container = document.getElementById('active-multipliers-container');
+    if (!list || !container) return;
+    
+    if (state.activeMultipliers && state.activeMultipliers.length > 0) {
+        container.classList.remove('hidden');
+        list.innerHTML = '';
+        state.activeMultipliers.forEach(m => {
+            const remaining = Math.ceil((m.endTime - now) / 60000);
+            list.innerHTML += `<div class="multiplier-badge">⚡ ${m.label} (${remaining}m)</div>`;
+        });
+    } else {
+        container.classList.add('hidden');
+    }
+}
+
+function openRewardBox() {
+    const now = Date.now();
+    const cooldown = 30 * 60 * 1000;
+    if (now - state.lastBoxOpenTime < cooldown) {
+        const remaining = cooldown - (now - state.lastBoxOpenTime);
+        const mins = Math.floor(remaining / 60000);
+        return appAlert(`Box is cooling down! Come back in ${mins}m.`);
+    }
+    
+    haptic('medium');
+    
+    // Show Ad first
+    if (adBlockMining) {
+        appAlert("Loading ad to unlock reward... 📺");
+        adBlockMining.show().then(() => {
+            grantBoxReward();
+        }).catch((err) => {
+            console.error("Ad error:", err);
+            // If ad fails, we still want them to be able to open it but maybe with a warning
+            // or just let them open it if it's a technical error
+            appAlert("Ad failed to load, but we'll let you open it this time! 🎁");
+            grantBoxReward();
+        });
+    } else {
+        // Fallback if ad system fails
+        grantBoxReward();
+    }
+}
+
+function grantBoxReward() {
+    state.lastBoxOpenTime = Date.now();
+    const rewards = [
+        { type: 'mult', factor: 2, duration: 10, label: "2x Power", desc: "2x Mining Power for 10 minutes!" },
+        { type: 'mult', factor: 5, duration: 5, label: "5x Power", desc: "5x Mining Power for 5 minutes!" },
+        { type: 'tokens', amount: 20, desc: "20 Tokens added to your wallet!" },
+        { type: 'mult', factor: 2, duration: 60, label: "2x Power", desc: "2x Mining Power for 1 hour!" },
+        { type: 'tokens', amount: 100, desc: "100 Tokens added to your wallet!" }
+    ];
+    
+    const reward = rewards[Math.floor(Math.random() * rewards.length)];
+    
+    if (reward.type === 'mult') {
+        if (!state.activeMultipliers) state.activeMultipliers = [];
+        state.activeMultipliers.push({
+            factor: reward.factor,
+            endTime: Date.now() + (reward.duration * 60 * 1000),
+            label: reward.label
+        });
+    } else {
+        state.walletCoins += reward.amount;
+        // Explicitly update wallet_coins
+        supabaseClient.from('players').update({
+            wallet_coins: state.walletCoins
+        }).eq('telegram_id', tgUser.id);
+    }
+    
+    // Show Popup
+    const iconEl = document.getElementById('reward-icon');
+    const titleEl = document.getElementById('reward-title');
+    const descEl = document.getElementById('reward-description');
+    const modalEl = document.getElementById('reward-result-modal');
+
+    if (iconEl) iconEl.innerText = reward.type === 'mult' ? "⚡" : "🪙";
+    if (titleEl) titleEl.innerText = "Reward Unlocked!";
+    if (descEl) descEl.innerText = reward.desc;
+    if (modalEl) modalEl.classList.remove('hidden');
+    
+    haptic('success');
+    forceSaveToDB();
+    updateUI();
+}
+
+function closeRewardResultModal() {
+    const modal = document.getElementById('reward-result-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
 function copyTemplate() {
     haptic('light');
     const refLink = `https://t.me/miners_hub_bot?start=${tgUser.id}`;
@@ -655,28 +805,101 @@ async function submitSocialPost() {
 // ==========================================
 let adBlockMining = null;
 let adBlockLives = null;
+let adCooldowns = {
+    mining: 0,
+    lives: 0
+};
 
-if (window.Adsgram) {
-    adBlockMining = window.Adsgram.init({ blockId: "int-26802" });
-    adBlockLives = window.Adsgram.init({ blockId: "int-26801" });
+function initAds() {
+    if (window.Adsgram) {
+        adBlockMining = window.Adsgram.init({ blockId: "int-26802" });
+        adBlockLives = window.Adsgram.init({ blockId: "int-26801" });
+        console.log("Adsgram initialized");
+    } else {
+        console.warn("Adsgram not found, retrying in 2s...");
+        setTimeout(initAds, 2000);
+    }
 }
+initAds();
 
 function watchAd(type) {
     if (globalStats.totalMined >= TOTAL_POOL) return appAlert("Game Over! The 300M Pool is depleted.");
+    
+    // Check Cooldown
+    const now = Date.now();
+    const timeLeft = Math.ceil((adCooldowns[type] - now) / 1000);
+    if (timeLeft > 0) {
+        return appAlert(`Please wait ${timeLeft}s before watching another ad! ⏳`);
+    }
+
     haptic('medium');
     
     const currentAdBlock = (type === 'mining') ? adBlockMining : adBlockLives;
+    const btnId = (type === 'mining') ? 'btn-watch-ad-mining' : 'btn-watch-ad-lives';
+    const btn = document.getElementById(btnId);
 
     if (currentAdBlock) {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = "Loading Ad... ⏳";
+        }
+
+        // Safety timeout: Reset button if ad doesn't show up in 10s
+        const safetyTimeout = setTimeout(() => {
+            if (btn && btn.innerText === "Loading Ad... ⏳") {
+                btn.disabled = false;
+                btn.innerText = (type === 'mining') ? "Watch Ad (+10 GH) 📺" : "+5 Lives 📺";
+                appAlert("Ad took too long to load. Please try again.");
+            }
+        }, 10000);
+
         currentAdBlock.show().then((result) => {
+            clearTimeout(safetyTimeout);
+            // SUCCESS: Ad watched completely
             grantReward(type);
+            
+            // Set Cooldown (10 seconds)
+            adCooldowns[type] = Date.now() + 10000;
+            startAdCooldownTimer(type, 10);
+            
         }).catch((result) => {
             console.error("Adsgram Error:", result);
-            appAlert("Ad was closed early or no ads available. Try again later.");
+            let msg = "Ad was closed early or no ads available.";
+            if (result && result.error) msg += " (" + result.error + ")";
+            appAlert(msg);
+            
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = (type === 'mining') ? "Watch Ad (+10 GH) 📺" : "+5 Lives 📺";
+            }
         });
     } else {
-        appAlert("Ad system unavailable. Try again later.");
+        appAlert("Ad system is still loading. Please try again in a few seconds.");
+        initAds(); // Try re-initializing
     }
+}
+
+function startAdCooldownTimer(type, seconds) {
+    const btnId = (type === 'mining') ? 'btn-watch-ad-mining' : 'btn-watch-ad-lives';
+    const btn = document.getElementById(btnId);
+    const originalText = (type === 'mining') ? "Watch Ad (+10 GH) 📺" : "+5 Lives 📺";
+    
+    let remaining = seconds;
+    const interval = setInterval(() => {
+        remaining--;
+        if (btn) {
+            btn.innerText = `Wait ${remaining}s... ⏳`;
+            btn.disabled = true;
+        }
+        
+        if (remaining <= 0) {
+            clearInterval(interval);
+            if (btn) {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+    }, 1000);
 }
 
 function grantReward(type) {
