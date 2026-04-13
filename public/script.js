@@ -109,15 +109,17 @@ let state = {
     permanentMultiplier: 1.0,
     referralCount: 0,
     bossTaps: 0,
-    bossDamage: 0
+    bossDamage: 0,
+    pendingBossDamage: 0,
+    pendingBossTaps: 0
 };
 
 const BOSS_LEVELS = [
-    { level: 1, hp: 100000, reward: 100000, emoji: "🪨" },
-    { level: 2, hp: 500000, reward: 500000, emoji: "🪵" },
-    { level: 3, hp: 1000000, reward: 1000000, emoji: "💎" },
-    { level: 4, hp: 2000000, reward: 2000000, emoji: "🌋" },
-    { level: 5, hp: 5000000, reward: 5000000, emoji: "👹" }
+    { level: 1, hp: 100000, reward: 100000, emoji: "👾" },
+    { level: 2, hp: 500000, reward: 500000, emoji: "🐉" },
+    { level: 3, hp: 1000000, reward: 1000000, emoji: "🐙" },
+    { level: 4, hp: 2000000, reward: 2000000, emoji: "🤖" },
+    { level: 5, hp: 5000000, reward: 5000000, emoji: "👺" }
 ];
 
 // ==========================================
@@ -1131,7 +1133,9 @@ const game2Area = document.getElementById('game-2-area');
 
 function exitGame() {
     haptic('light'); 
+    syncBossData(); // Final sync before leaving
     if (bossPollInterval) clearInterval(bossPollInterval);
+    if (bossSyncInterval) clearInterval(bossSyncInterval);
     game1Area.classList.add('hidden'); 
     game2Area.classList.add('hidden'); 
     document.getElementById('boss-game-area').classList.add('hidden');
@@ -1472,15 +1476,22 @@ setTimeout(updateInviteLink, 1000);
 // ==========================================
 let currentBoss = null;
 let bossPollInterval = null;
+let bossSyncInterval = null;
 
 async function initBossGame() {
     haptic('medium');
     document.getElementById('game-menu').classList.add('hidden');
     document.getElementById('boss-game-area').classList.remove('hidden');
     
+    state.pendingBossDamage = 0;
+    state.pendingBossTaps = 0;
+    
     await fetchBossData();
     if (bossPollInterval) clearInterval(bossPollInterval);
     bossPollInterval = setInterval(fetchBossData, 3000); // Poll every 3s for HP updates
+    
+    if (bossSyncInterval) clearInterval(bossSyncInterval);
+    bossSyncInterval = setInterval(syncBossData, 5000); // Sync every 5s
 }
 
 async function fetchBossData() {
@@ -1546,13 +1557,20 @@ async function fetchBossData() {
 function updateBossUI() {
     if (!currentBoss) return;
     
-    const hpPercent = (currentBoss.current_hp / currentBoss.max_hp) * 100;
+    // Incorporate pending local damage for smooth UI
+    const effectiveHp = Math.max(0, currentBoss.current_hp - state.pendingBossDamage);
+    const hpPercent = (effectiveHp / currentBoss.max_hp) * 100;
+    
     document.getElementById('boss-hp-fill').style.width = `${hpPercent}%`;
-    document.getElementById('boss-hp-text').innerText = `${Math.ceil(currentBoss.current_hp).toLocaleString()} / ${currentBoss.max_hp.toLocaleString()}`;
+    document.getElementById('boss-hp-text').innerText = `${Math.ceil(effectiveHp).toLocaleString()} / ${currentBoss.max_hp.toLocaleString()}`;
     document.getElementById('boss-level-display').innerText = `Level ${currentBoss.level}`;
-    document.getElementById('boss-visual').innerText = BOSS_LEVELS[currentBoss.level - 1]?.emoji || "👹";
-    document.getElementById('player-boss-damage').innerText = state.bossDamage.toFixed(1);
-    document.getElementById('player-boss-taps').innerText = state.bossTaps;
+    document.getElementById('boss-visual').innerText = BOSS_LEVELS[currentBoss.level - 1]?.emoji || "👺";
+    
+    const displayDamage = state.bossDamage + state.pendingBossDamage;
+    document.getElementById('player-boss-damage').innerText = displayDamage.toFixed(1);
+    
+    const displayTaps = state.bossTaps - state.pendingBossTaps;
+    document.getElementById('player-boss-taps').innerText = Math.max(0, displayTaps);
 }
 
 function updateSpawnTimer(nextSpawn) {
@@ -1568,9 +1586,10 @@ function updateSpawnTimer(nextSpawn) {
     document.getElementById('boss-spawn-timer').innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-async function attackBoss() {
-    if (!currentBoss || state.bossTaps <= 0) {
-        if (state.bossTaps <= 0) appAlert("You need Taps to attack! Watch an ad to get 100 Taps.");
+function attackBoss() {
+    const availableTaps = state.bossTaps - state.pendingBossTaps;
+    if (!currentBoss || availableTaps <= 0) {
+        if (availableTaps <= 0) appAlert("You need Taps to attack! Watch an ad to get 100 Taps.");
         return;
     }
 
@@ -1583,13 +1602,31 @@ async function attackBoss() {
     void visual.offsetWidth; // Trigger reflow
     visual.classList.add('boss-hit-anim');
 
-    state.bossTaps--;
-    state.bossDamage += damage;
+    // Update local pending state for real-time feel
+    state.pendingBossTaps++;
+    state.pendingBossDamage += damage;
     updateBossUI();
+    
+    // If boss HP reaches 0 locally, trigger immediate sync
+    const effectiveHp = currentBoss.current_hp - state.pendingBossDamage;
+    if (effectiveHp <= 0) {
+        syncBossData();
+    }
+}
+
+async function syncBossData() {
+    if (!currentBoss || (state.pendingBossDamage === 0 && state.pendingBossTaps === 0)) return;
+
+    const damageToSync = state.pendingBossDamage;
+    const tapsToSync = state.pendingBossTaps;
+    
+    // Reset pending immediately to avoid double-counting
+    state.pendingBossDamage = 0;
+    state.pendingBossTaps = 0;
 
     try {
         // 1. Update Boss HP
-        const newHp = Math.max(0, currentBoss.current_hp - damage);
+        const newHp = Math.max(0, currentBoss.current_hp - damageToSync);
         const { error: hpError } = await supabaseClient
             .from('boss_events')
             .update({ 
@@ -1612,15 +1649,16 @@ async function attackBoss() {
         if (existingContrib) {
             await supabaseClient
                 .from('boss_contributions')
-                .update({ damage_dealt: Number(existingContrib.damage_dealt) + damage })
+                .update({ damage_dealt: Number(existingContrib.damage_dealt) + damageToSync })
                 .eq('id', existingContrib.id);
         } else {
             await supabaseClient
                 .from('boss_contributions')
-                .insert({ boss_id: currentBoss.id, player_id: tgUser.id, damage_dealt: damage });
+                .insert({ boss_id: currentBoss.id, player_id: tgUser.id, damage_dealt: damageToSync });
         }
 
         // 3. Update Player Taps
+        state.bossTaps -= tapsToSync;
         await supabaseClient.from('players').update({ boss_taps: state.bossTaps }).eq('telegram_id', tgUser.id);
 
         if (newHp <= 0) {
@@ -1629,7 +1667,7 @@ async function attackBoss() {
             fetchBossData();
         }
     } catch (err) {
-        console.error("Attack error:", err);
+        console.error("Sync error:", err);
     }
 }
 
