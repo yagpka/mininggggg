@@ -1245,63 +1245,26 @@ loadGameData();
 async function processReferral(referrerId) {
     try {
         console.log("Processing referral for referrer:", referrerId);
-        // 1. Check if already referred
-        const { data: existingRef, error: checkErr } = await supabaseClient
-            .from('refferal2')
-            .select('id')
-            .eq('referred_id', tgUser.id)
-            .maybeSingle(); // Use maybeSingle to avoid throwing error on 0 rows
-            
-        if (existingRef) {
-            console.log("User already referred.");
-            return; // Already referred
-        }
+        
+        // Use secure RPC to handle referral logic server-side
+        const { data: success, error } = await supabaseClient.rpc('process_referral', {
+            p_referrer_id: referrerId,
+            p_referred_id: tgUser.id
+        });
 
-        // 2. Insert into refferal2
-        const { error: insertErr } = await supabaseClient
-            .from('refferal2')
-            .insert([{
-                referrer_id: referrerId,
-                referred_id: tgUser.id,
-                reward_coins: 100,
-                reward_power: 100
-            }]);
-
-        if (insertErr) {
-            console.error("Referral insert error (Check RLS policies!):", insertErr);
+        if (error) {
+            console.error("Referral RPC error:", error);
             return;
         }
 
-        // 3. Reward current user
-        state.gh += 100;
-        state.walletCoins += 100;
-        appAlert("🎉 You were referred! +100 GH/s and +100 Coins!");
-        
-        // Explicitly update since forceSaveToDB no longer saves these fields
-        await supabaseClient.from('players').update({
-            gh_power: state.gh,
-            wallet_coins: state.walletCoins
-        }).eq('telegram_id', tgUser.id);
-        
-        forceSaveToDB();
-
-        // 4. Reward referrer (Client-side approach - ideally this should be an RPC or DB trigger)
-        const { data: referrerData } = await supabaseClient
-            .from('players')
-            .select('gh_power, wallet_coins')
-            .eq('telegram_id', referrerId)
-            .maybeSingle();
-            
-        if (referrerData) {
-            const { error: updateErr } = await supabaseClient
-                .from('players')
-                .update({
-                    gh_power: (Number(referrerData.gh_power) || 0) + 100,
-                    wallet_coins: (Number(referrerData.wallet_coins) || 0) + 100
-                })
-                .eq('telegram_id', referrerId);
-                
-            if (updateErr) console.error("Failed to reward referrer (Check RLS!):", updateErr);
+        if (success) {
+            // Reward current user locally (server already updated DB)
+            state.gh += 100;
+            state.walletCoins += 100;
+            appAlert("🎉 You were referred! +100 GH/s and +100 Coins!");
+            forceSaveToDB();
+        } else {
+            console.log("User already referred or invalid.");
         }
 
     } catch (err) {
@@ -1311,38 +1274,52 @@ async function processReferral(referrerId) {
 
 async function loadReferralHistory() {
     try {
-        const { data, error } = await supabaseClient
-            .from('refferal2')
-            .select('referred_id, reward_coins, reward_power, created_at')
-            .eq('referrer_id', tgUser.id)
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        state.referralCount = data ? data.length : 0;
-
-        const listEl = document.getElementById('referral-history-list');
-        if (!listEl) return;
-
-        if (!data || data.length === 0) {
-            listEl.innerHTML = '<p style="text-align:center; color:var(--text-muted); font-size:12px;">No frens invited yet. Share your link!</p>';
-            return;
-        }
-
-        listEl.innerHTML = '';
-        data.forEach(ref => {
-            listEl.innerHTML += `
-                <div class="task-item" style="margin-bottom: 10px;">
-                    <div class="task-info">
-                        <span class="task-title">User ID: ${ref.referred_id}</span>
-                        <span class="task-reward">+${ref.reward_power} GH/s | +${ref.reward_coins} 🪙</span>
-                    </div>
-                    <div class="task-status" style="color: var(--accent-green);">Joined</div>
-                </div>
-            `;
+        // Use RPC to bypass potential RLS read issues
+        const { data, error } = await supabaseClient.rpc('get_referrals', {
+            p_telegram_id: tgUser.id
         });
+
+        if (error) {
+            // Fallback to direct select if RPC doesn't exist yet
+            const { data: fallbackData, error: fallbackErr } = await supabaseClient
+                .from('refferal2')
+                .select('referred_id, reward_coins, reward_power, created_at')
+                .eq('referrer_id', tgUser.id)
+                .order('created_at', { ascending: false });
+                
+            if (fallbackErr) throw fallbackErr;
+            processReferralData(fallbackData);
+        } else {
+            processReferralData(data);
+        }
     } catch (err) {
         console.error("Failed to load referral history:", err);
     }
+}
+
+function processReferralData(data) {
+    state.referralCount = data ? data.length : 0;
+
+    const listEl = document.getElementById('referral-history-list');
+    if (!listEl) return;
+
+    if (!data || data.length === 0) {
+        listEl.innerHTML = '<p style="text-align:center; color:var(--text-muted); font-size:12px;">No frens invited yet. Share your link!</p>';
+        return;
+    }
+
+    listEl.innerHTML = '';
+    data.forEach(ref => {
+        listEl.innerHTML += `
+            <div class="task-item" style="margin-bottom: 10px;">
+                <div class="task-info">
+                    <span class="task-title">User ID: ${ref.referred_id}</span>
+                    <span class="task-reward">+${ref.reward_power} GH/s | +${ref.reward_coins} 🪙</span>
+                </div>
+                <div class="task-status" style="color: var(--accent-green);">Joined</div>
+            </div>
+        `;
+    });
 }
 
 async function loadLeaderboards() {
