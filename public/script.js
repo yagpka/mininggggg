@@ -114,6 +114,14 @@ let state = {
     pendingBossTaps: 0
 };
 
+const ONE_TIME_TASKS = [
+    { id: 'tg', title: 'Join Telegram Channel', req: { type: 'link' }, reward: { type: 'gh', amount: 20 }, icon: '📱' },
+    { id: 'ref_3', title: 'Invite 3 Frens', req: { type: 'refs', value: 3 }, reward: { type: 'gh', amount: 500 }, icon: '👥' },
+    { id: 'ref_10', title: 'Invite 10 Frens', req: { type: 'refs', value: 10 }, reward: { type: 'gh', amount: 1500 }, icon: '🔥' },
+    { id: 'ref_25_task', title: 'Invite 25 Frens', req: { type: 'refs', value: 25 }, reward: { type: 'coins', amount: 5000 }, icon: '💎' },
+    { id: 'ref_50', title: 'Invite 50 Frens', req: { type: 'refs', value: 50 }, reward: { type: 'gh', amount: 10000 }, icon: '👑' }
+];
+
 const BOSS_LEVELS = [
     { level: 1, hp: 100000, reward: 100000, emoji: "👾" },
     { level: 2, hp: 500000, reward: 500000, emoji: "🐉" },
@@ -285,8 +293,11 @@ function processOfflineProgress() {
 
 function checkDailyStreak() {
     const today = new Date().toISOString().split('T')[0];
+    let isNewDay = false;
+
     if (!state.lastLoginDate) {
         state.streakDays = 1; state.lastLoginDate = today;
+        isNewDay = true;
     } else if (state.lastLoginDate !== today) {
         const lastDate = new Date(state.lastLoginDate);
         const currDate = new Date(today);
@@ -295,7 +306,13 @@ function checkDailyStreak() {
         if (diffDays === 1) state.streakDays += 1; 
         else if (diffDays > 1) state.streakDays = 1;  
         state.lastLoginDate = today;
+        isNewDay = true;
     }
+
+    if (isNewDay) {
+        // Any other daily resets can go here
+    }
+
     forceSaveToDB(); 
 }
 
@@ -505,27 +522,102 @@ function saveAddress() {
 // ==========================================
 function updateTasksUI() {
     const streakContainer = document.getElementById('streak-days-ui');
-    if(!streakContainer) return;
-    streakContainer.innerHTML = '';
-    
-    let startDay = Math.floor((state.streakDays - 1) / 7) * 7 + 1;
-    for(let i = 0; i < 7; i++) {
-        let dayNum = startDay + i;
-        let isPast = dayNum < state.streakDays;
-        let isToday = dayNum === state.streakDays;
+    if(streakContainer) {
+        streakContainer.innerHTML = '';
         
-        let statusClass = isToday ? 'active' : (isPast ? 'completed' : '');
-        let icon = isPast ? '✓' : (isToday ? '🔥' : '🔒');
-        
-        streakContainer.innerHTML += `<div class="streak-day ${statusClass}"><div class="streak-icon">${icon}</div><span>Day ${dayNum}</span></div>`;
+        let startDay = Math.floor((state.streakDays - 1) / 7) * 7 + 1;
+        for(let i = 0; i < 7; i++) {
+            let dayNum = startDay + i;
+            let isPast = dayNum < state.streakDays;
+            let isToday = dayNum === state.streakDays;
+            
+            let statusClass = isToday ? 'active' : (isPast ? 'completed' : '');
+            let icon = isPast ? '✓' : (isToday ? '🔥' : '🔒');
+            
+            streakContainer.innerHTML += `<div class="streak-day ${statusClass}"><div class="streak-icon">${icon}</div><span>Day ${dayNum}</span></div>`;
+        }
     }
 
-    state.completedTasks.forEach(taskId => {
-        const btn = document.getElementById('btn-task-' + taskId);
-        if (btn && !btn.disabled) {
-            btn.innerText = "Done ✓"; btn.className = "btn btn-disabled task-btn"; btn.disabled = true;
+    const oneTimeList = document.getElementById('onetime-tasks-list');
+    if (!oneTimeList) return;
+
+    if (!state.completedTasks) state.completedTasks = [];
+
+    // Render One-Time Tasks
+    oneTimeList.innerHTML = ONE_TIME_TASKS.map(task => {
+        let isCompleted = false;
+        if (task.req.type === 'link') {
+            isCompleted = state.completedTasks.includes(task.id); // For TG task
+        } else if (task.req.type === 'refs') {
+            isCompleted = (state.referralCount || 0) >= task.req.value;
         }
-    });
+        
+        const isClaimed = state.completedTasks.includes(task.id);
+        
+        let btnHtml = '';
+        if (isClaimed) {
+            btnHtml = `<button class="btn btn-secondary task-btn" disabled>Claimed</button>`;
+        } else if (isCompleted) {
+            btnHtml = `<button class="btn btn-action task-btn" style="background: var(--accent-yellow);" onclick="claimTaskReward('${task.id}')">Claim</button>`;
+        } else {
+            if (task.req.type === 'link') {
+                btnHtml = `<button id="btn-task-${task.id}" class="btn btn-action task-btn" onclick="completeTask('${task.id}', '${task.reward.type}', ${task.reward.amount}, this)">Do Task</button>`;
+            } else {
+                btnHtml = `<div style="font-size: 12px; color: var(--text-muted); text-align: right;">${state.referralCount || 0}/${task.req.value}</div>`;
+            }
+        }
+
+        return `
+            <div class="task-item" style="border-left: 3px solid var(--accent-yellow);">
+                <div class="task-info">
+                    <span class="task-icon">${task.icon}</span>
+                    <div>
+                        <div class="task-title">${task.title}</div>
+                        <div class="task-reward">+${task.reward.amount} ${task.reward.type === 'gh' ? 'GH/s' : '🪙'}</div>
+                    </div>
+                </div>
+                ${btnHtml}
+            </div>
+        `;
+    }).join('');
+}
+
+async function claimTaskReward(taskId) {
+    haptic('success');
+    let task = null;
+    
+    if (!state.completedTasks) state.completedTasks = [];
+
+    if (state.completedTasks.includes(taskId)) return;
+    task = ONE_TIME_TASKS.find(t => t.id === taskId);
+    if (!task) return;
+    state.completedTasks.push(taskId);
+
+    try {
+        if (task.reward.type === 'gh') {
+            const { data, error } = await supabaseClient.rpc('secure_ad_reward', { p_telegram_id: tgUser.id, p_amount: task.reward.amount });
+            if (error) throw error;
+            if (data && data.success) {
+                state.gh = data.new_gh;
+            } else {
+                state.gh += task.reward.amount;
+                await supabaseClient.from('players').update({ gh_power: state.gh }).eq('telegram_id', tgUser.id);
+            }
+        } else if (task.reward.type === 'coins') {
+            state.walletCoins += task.reward.amount;
+            await supabaseClient.from('players').update({ wallet_coins: state.walletCoins }).eq('telegram_id', tgUser.id);
+        }
+    } catch (err) {
+        console.warn("Reward RPC failed, falling back to client-side:", err);
+        if (task.reward.type === 'gh') {
+            state.gh += task.reward.amount;
+            await supabaseClient.from('players').update({ gh_power: state.gh }).eq('telegram_id', tgUser.id);
+        }
+    }
+
+    forceSaveToDB();
+    updateUI();
+    appAlert(`Task Reward Claimed! 🎉`);
 }
 
 function completeTask(taskId, rewardType, rewardAmt, element) {
@@ -858,16 +950,28 @@ async function claimAchievement(achId) {
     haptic('success');
     state.claimedAchievements.push(achId);
 
-    if (ach.reward.type === 'gh') {
-        // Use RPC for power reward
-        await supabaseClient.rpc('secure_ad_reward', { p_telegram_id: tgUser.id, p_amount: ach.reward.amount });
-        // Update local state (though it will sync on next load)
-        state.gh += ach.reward.amount;
-    } else if (ach.reward.type === 'tokens') {
-        state.walletCoins += ach.reward.amount;
-        await supabaseClient.from('players').update({ wallet_coins: state.walletCoins }).eq('telegram_id', tgUser.id);
-    } else if (ach.reward.type === 'mult') {
-        state.permanentMultiplier += ach.reward.amount;
+    try {
+        if (ach.reward.type === 'gh') {
+            const { data, error } = await supabaseClient.rpc('secure_ad_reward', { p_telegram_id: tgUser.id, p_amount: ach.reward.amount });
+            if (error) throw error;
+            if (data && data.success) {
+                state.gh = data.new_gh;
+            } else {
+                state.gh += ach.reward.amount;
+                await supabaseClient.from('players').update({ gh_power: state.gh }).eq('telegram_id', tgUser.id);
+            }
+        } else if (ach.reward.type === 'tokens') {
+            state.walletCoins += ach.reward.amount;
+            await supabaseClient.from('players').update({ wallet_coins: state.walletCoins }).eq('telegram_id', tgUser.id);
+        } else if (ach.reward.type === 'mult') {
+            state.permanentMultiplier += ach.reward.amount;
+        }
+    } catch (err) {
+        console.warn("Achievement RPC failed, falling back to client-side:", err);
+        if (ach.reward.type === 'gh') {
+            state.gh += ach.reward.amount;
+            await supabaseClient.from('players').update({ gh_power: state.gh }).eq('telegram_id', tgUser.id);
+        }
     }
 
     forceSaveToDB();
@@ -1159,7 +1263,7 @@ function startGame1() {
     if (!deductLife()) return exitGame();
     haptic('medium'); g1Active = true; g1StartBtn.classList.add('hidden');
     g1Target.classList.remove('crystal-disabled'); g1Inst.innerText = "TAP FAST!!";
-    
+
     g1TimerInterval = setInterval(() => {
         g1TimeLeft -= 0.1; g1TimerText.innerText = g1TimeLeft.toFixed(1) + "s";
         if (g1TimeLeft <= 0) { clearInterval(g1TimerInterval); endGame1(false); }
@@ -1200,7 +1304,7 @@ function startGame2() {
     haptic('medium'); g2Active = true; g2StartBtn.classList.add('hidden');
     g2Inst.innerText = "TAP TRACK TO STOP!"; g2Track.style.pointerEvents = "auto";
     g2Speed = Math.random() * 1.5 + 2; 
-    
+
     function moveSlider() {
         if (!g2Active) return;
         g2Pos += g2Dir * g2Speed;
@@ -1327,7 +1431,7 @@ async function loadLeaderboards() {
         // 1. Power Leaderboard
         const { data: topMiners, error: minersErr } = await supabaseClient
             .from('players')
-            .select('username, first_name, gh_power')
+            .select('telegram_id, username, first_name, gh_power')
             .order('gh_power', { ascending: false })
             .limit(10);
             
@@ -1337,12 +1441,16 @@ async function loadLeaderboards() {
                 powerListEl.innerHTML = '';
                 topMiners.forEach((miner, index) => {
                     const name = miner.username !== 'unknown' ? '@' + miner.username : miner.first_name;
+                    const isMe = miner.telegram_id === tgUser.id;
+                    const highlightStyle = isMe ? 'border-left: 3px solid var(--accent-yellow); background: rgba(255, 215, 0, 0.1);' : '';
+                    const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`;
+                    
                     powerListEl.innerHTML += `
-                        <div class="task-item" style="margin-bottom: 10px;">
+                        <div class="task-item" style="margin-bottom: 10px; ${highlightStyle}">
                             <div class="task-info">
-                                <span class="task-title">#${index + 1} ${name}</span>
+                                <span class="task-title" style="${isMe ? 'font-weight: bold; color: var(--accent-yellow);' : ''}">${medal} ${name} ${isMe ? '(You)' : ''}</span>
                             </div>
-                            <div class="task-status" style="color: var(--accent-yellow);">${miner.gh_power} GH/s</div>
+                            <div class="task-status" style="color: var(--accent-yellow); font-weight: bold;">${miner.gh_power} GH/s</div>
                         </div>
                     `;
                 });
@@ -1377,19 +1485,24 @@ async function loadLeaderboards() {
                 const referrerMap = {};
                 if (topReferrersData) {
                     topReferrersData.forEach(p => {
-                        referrerMap[p.telegram_id] = p.username !== 'unknown' ? '@' + p.username : p.first_name;
+                        referrerMap[p.telegram_id] = p;
                     });
                 }
                 
                 refListEl.innerHTML = '';
                 sortedRefs.forEach((ref, index) => {
-                    const name = referrerMap[ref[0]] || `User ${ref[0]}`;
+                    const pData = referrerMap[ref[0]];
+                    const name = pData ? (pData.username !== 'unknown' ? '@' + pData.username : pData.first_name) : `User ${ref[0]}`;
+                    const isMe = String(ref[0]) === String(tgUser.id);
+                    const highlightStyle = isMe ? 'border-left: 3px solid var(--accent-cyan); background: rgba(0, 255, 255, 0.1);' : '';
+                    const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`;
+
                     refListEl.innerHTML += `
-                        <div class="task-item" style="margin-bottom: 10px;">
+                        <div class="task-item" style="margin-bottom: 10px; ${highlightStyle}">
                             <div class="task-info">
-                                <span class="task-title">#${index + 1} ${name}</span>
+                                <span class="task-title" style="${isMe ? 'font-weight: bold; color: var(--accent-cyan);' : ''}">${medal} ${name} ${isMe ? '(You)' : ''}</span>
                             </div>
-                            <div class="task-status" style="color: var(--accent-cyan);">${ref[1]} Invites</div>
+                            <div class="task-status" style="color: var(--accent-cyan); font-weight: bold;">${ref[1]} Invites</div>
                         </div>
                     `;
                 });
@@ -1587,6 +1700,7 @@ function attackBoss() {
     visual.classList.remove('boss-hit-anim');
     void visual.offsetWidth; // Trigger reflow
     visual.classList.add('boss-hit-anim');
+    createDamageParticle(damage);
 
     // Update local pending state for real-time feel
     state.pendingBossTaps++;
@@ -1598,6 +1712,44 @@ function attackBoss() {
     if (effectiveHp <= 0) {
         syncBossData();
     }
+}
+
+function createDamageParticle(damage) {
+    const bossArea = document.getElementById('boss-game-area');
+    if (!bossArea) return;
+    
+    const particle = document.createElement('div');
+    particle.innerText = `-${damage.toFixed(1)}`;
+    particle.style.position = 'absolute';
+    particle.style.color = '#ff4444';
+    particle.style.fontWeight = '900';
+    particle.style.fontSize = '28px';
+    particle.style.pointerEvents = 'none';
+    particle.style.textShadow = '0 0 10px #000, 0 0 20px #ff0000';
+    particle.style.zIndex = '100';
+    
+    // Randomize position around the center
+    const x = 50 + (Math.random() * 30 - 15);
+    const y = 30 + (Math.random() * 30 - 15);
+    
+    particle.style.left = `${x}%`;
+    particle.style.top = `${y}%`;
+    
+    bossArea.appendChild(particle);
+    
+    // Animate
+    let opacity = 1;
+    let topPos = y;
+    const anim = setInterval(() => {
+        opacity -= 0.05;
+        topPos -= 1.5;
+        particle.style.opacity = opacity;
+        particle.style.top = `${topPos}%`;
+        if (opacity <= 0) {
+            clearInterval(anim);
+            particle.remove();
+        }
+    }, 30);
 }
 
 async function syncBossData() {
