@@ -111,7 +111,15 @@ let state = {
     bossTaps: 0,
     bossDamage: 0,
     pendingBossDamage: 0,
-    pendingBossTaps: 0
+    pendingBossTaps: 0,
+    dailyTasksProgress: {
+        bossDamage: 0,
+        crystalPlayed: 0,
+        corePlayed: 0,
+        boxesOpened: 0,
+        adPowerGained: 0
+    },
+    dailyTasksClaimed: []
 };
 
 const ONE_TIME_TASKS = [
@@ -120,6 +128,14 @@ const ONE_TIME_TASKS = [
     { id: 'ref_10', title: 'Invite 10 Frens', req: { type: 'refs', value: 10 }, reward: { type: 'gh', amount: 1500 }, icon: '🔥' },
     { id: 'ref_25_task', title: 'Invite 25 Frens', req: { type: 'refs', value: 25 }, reward: { type: 'coins', amount: 5000 }, icon: '💎' },
     { id: 'ref_50', title: 'Invite 50 Frens', req: { type: 'refs', value: 50 }, reward: { type: 'gh', amount: 10000 }, icon: '👑' }
+];
+
+const DAILY_TASKS = [
+    { id: 'daily_boss_dmg', title: 'Deal 200 Boss Damage', req: 200, reward: { type: 'gh', amount: 25 }, icon: '⚔️', trackKey: 'bossDamage' },
+    { id: 'daily_crystal', title: 'Play Crystal Overload 20x', req: 20, reward: { type: 'gh', amount: 50 }, icon: '💎', trackKey: 'crystalPlayed' },
+    { id: 'daily_core', title: 'Play Core Alignment 30x', req: 30, reward: { type: 'gh', amount: 50 }, icon: '🎯', trackKey: 'corePlayed' },
+    { id: 'daily_box', title: 'Open Mystery Box 5x', req: 5, reward: { type: 'coins', amount: 500 }, icon: '🎁', trackKey: 'boxesOpened' },
+    { id: 'daily_ad_power', title: 'Get 100 GH from Ads', req: 100, reward: { type: 'gh', amount: 200 }, icon: '📺', trackKey: 'adPowerGained' }
 ];
 
 const BOSS_LEVELS = [
@@ -181,6 +197,8 @@ async function loadGameData() {
             state.claimedAchievements = dbState.claimed_achievements || [];
             state.permanentMultiplier = Number(dbState.permanent_multiplier) || 1.0;
             state.bossTaps = Number(dbState.boss_taps) || 0;
+            state.dailyTasksProgress = dbState.daily_tasks_progress || { bossDamage: 0, crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
+            state.dailyTasksClaimed = dbState.daily_tasks_claimed || [];
         }
 
         // 2. Fetch Social Submission History
@@ -201,6 +219,8 @@ async function loadGameData() {
             state = { ...state, ...JSON.parse(savedState) };
             if(!state.completedTasks) state.completedTasks = [];
             if(!state.socialHistory) state.socialHistory = [];
+            if(!state.dailyTasksProgress) state.dailyTasksProgress = { bossDamage: 0, crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
+            if(!state.dailyTasksClaimed) state.dailyTasksClaimed = [];
         }
     }
 
@@ -259,7 +279,9 @@ async function forceSaveToDB() {
             active_multipliers: state.activeMultipliers,
             claimed_levels: state.claimedLevels,
             claimed_achievements: state.claimedAchievements,
-            permanent_multiplier: state.permanentMultiplier
+            permanent_multiplier: state.permanentMultiplier,
+            daily_tasks_progress: state.dailyTasksProgress,
+            daily_tasks_claimed: state.dailyTasksClaimed
         }).eq('telegram_id', tgUser.id);
     } catch (err) {
         console.error("Save error:", err);
@@ -310,7 +332,14 @@ function checkDailyStreak() {
     }
 
     if (isNewDay) {
-        // Any other daily resets can go here
+        state.dailyTasksProgress = {
+            bossDamage: 0,
+            crystalPlayed: 0,
+            corePlayed: 0,
+            boxesOpened: 0,
+            adPowerGained: 0
+        };
+        state.dailyTasksClaimed = [];
     }
 
     forceSaveToDB(); 
@@ -538,10 +567,42 @@ function updateTasksUI() {
         }
     }
 
+    const dailyList = document.getElementById('daily-tasks-list');
     const oneTimeList = document.getElementById('onetime-tasks-list');
-    if (!oneTimeList) return;
+    if (!dailyList || !oneTimeList) return;
 
+    if (!state.dailyTasksClaimed) state.dailyTasksClaimed = [];
+    if (!state.dailyTasksProgress) state.dailyTasksProgress = { bossDamage: 0, crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
     if (!state.completedTasks) state.completedTasks = [];
+
+    // Render Daily Tasks
+    dailyList.innerHTML = DAILY_TASKS.map(task => {
+        const progress = state.dailyTasksProgress[task.trackKey] || 0;
+        const isCompleted = progress >= task.req;
+        const isClaimed = state.dailyTasksClaimed.includes(task.id);
+        
+        let btnHtml = '';
+        if (isClaimed) {
+            btnHtml = `<button class="btn btn-secondary task-btn" disabled>Claimed</button>`;
+        } else if (isCompleted) {
+            btnHtml = `<button class="btn btn-action task-btn" style="background: var(--accent-cyan);" onclick="claimTaskReward('${task.id}', 'daily')">Claim</button>`;
+        } else {
+            btnHtml = `<div style="font-size: 12px; color: var(--text-muted); text-align: right;">${Math.floor(progress)}/${task.req}</div>`;
+        }
+
+        return `
+            <div class="task-item" style="border-left: 3px solid var(--accent-cyan);">
+                <div class="task-info">
+                    <span class="task-icon">${task.icon}</span>
+                    <div>
+                        <div class="task-title">${task.title}</div>
+                        <div class="task-reward">+${task.reward.amount} ${task.reward.type === 'gh' ? 'GH/s' : '🪙'}</div>
+                    </div>
+                </div>
+                ${btnHtml}
+            </div>
+        `;
+    }).join('');
 
     // Render One-Time Tasks
     oneTimeList.innerHTML = ONE_TIME_TASKS.map(task => {
@@ -558,7 +619,7 @@ function updateTasksUI() {
         if (isClaimed) {
             btnHtml = `<button class="btn btn-secondary task-btn" disabled>Claimed</button>`;
         } else if (isCompleted) {
-            btnHtml = `<button class="btn btn-action task-btn" style="background: var(--accent-yellow);" onclick="claimTaskReward('${task.id}')">Claim</button>`;
+            btnHtml = `<button class="btn btn-action task-btn" style="background: var(--accent-yellow);" onclick="claimTaskReward('${task.id}', 'onetime')">Claim</button>`;
         } else {
             if (task.req.type === 'link') {
                 btnHtml = `<button id="btn-task-${task.id}" class="btn btn-action task-btn" onclick="completeTask('${task.id}', '${task.reward.type}', ${task.reward.amount}, this)">Do Task</button>`;
@@ -582,16 +643,25 @@ function updateTasksUI() {
     }).join('');
 }
 
-async function claimTaskReward(taskId) {
+async function claimTaskReward(taskId, type) {
     haptic('success');
     let task = null;
     
+    if (!state.dailyTasksClaimed) state.dailyTasksClaimed = [];
+    if (!state.dailyTasksProgress) state.dailyTasksProgress = { bossDamage: 0, crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
     if (!state.completedTasks) state.completedTasks = [];
 
-    if (state.completedTasks.includes(taskId)) return;
-    task = ONE_TIME_TASKS.find(t => t.id === taskId);
-    if (!task) return;
-    state.completedTasks.push(taskId);
+    if (type === 'daily') {
+        if (state.dailyTasksClaimed.includes(taskId)) return;
+        task = DAILY_TASKS.find(t => t.id === taskId);
+        if (!task || (state.dailyTasksProgress[task.trackKey] || 0) < task.req) return;
+        state.dailyTasksClaimed.push(taskId);
+    } else {
+        if (state.completedTasks.includes(taskId)) return;
+        task = ONE_TIME_TASKS.find(t => t.id === taskId);
+        if (!task) return;
+        state.completedTasks.push(taskId);
+    }
 
     try {
         if (task.reward.type === 'gh') {
@@ -618,6 +688,17 @@ async function claimTaskReward(taskId) {
     forceSaveToDB();
     updateUI();
     appAlert(`Task Reward Claimed! 🎉`);
+}
+
+function updateTaskProgress(key, amount) {
+    if (!state.dailyTasksProgress) {
+        state.dailyTasksProgress = { bossDamage: 0, crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
+    }
+    if (state.dailyTasksProgress[key] !== undefined) {
+        state.dailyTasksProgress[key] += amount;
+        forceSaveToDB();
+        updateTasksUI();
+    }
 }
 
 function completeTask(taskId, rewardType, rewardAmt, element) {
@@ -793,6 +874,7 @@ function openRewardBox() {
 
 function grantBoxReward() {
     state.lastBoxOpenTime = Date.now();
+    updateTaskProgress('boxesOpened', 1);
     const rewards = [
         { type: 'mult', factor: 2, duration: 10, label: "2x Power", desc: "2x Mining Power for 10 minutes!" },
         { type: 'mult', factor: 5, duration: 5, label: "5x Power", desc: "5x Mining Power for 5 minutes!" },
@@ -1205,6 +1287,7 @@ function grantReward(type) {
                     supabaseClient.from('players').update({ gh_power: state.gh }).eq('telegram_id', tgUser.id);
                     appAlert("+10 GH Power unlocked!");
                 }
+                updateTaskProgress('adPowerGained', 10);
                 fetchGlobalStats();
                 forceSaveToDB();
                 updateUI();
@@ -1263,6 +1346,8 @@ function startGame1() {
     if (!deductLife()) return exitGame();
     haptic('medium'); g1Active = true; g1StartBtn.classList.add('hidden');
     g1Target.classList.remove('crystal-disabled'); g1Inst.innerText = "TAP FAST!!";
+    
+    updateTaskProgress('crystalPlayed', 1);
 
     g1TimerInterval = setInterval(() => {
         g1TimeLeft -= 0.1; g1TimerText.innerText = g1TimeLeft.toFixed(1) + "s";
@@ -1304,6 +1389,8 @@ function startGame2() {
     haptic('medium'); g2Active = true; g2StartBtn.classList.add('hidden');
     g2Inst.innerText = "TAP TRACK TO STOP!"; g2Track.style.pointerEvents = "auto";
     g2Speed = Math.random() * 1.5 + 2; 
+    
+    updateTaskProgress('corePlayed', 1);
 
     function moveSlider() {
         if (!g2Active) return;
@@ -1705,6 +1792,7 @@ function attackBoss() {
     // Update local pending state for real-time feel
     state.pendingBossTaps++;
     state.pendingBossDamage += damage;
+    updateTaskProgress('bossDamage', damage);
     updateBossUI();
     
     // If boss HP reaches 0 locally, trigger immediate sync
