@@ -243,10 +243,11 @@ async function loadGameData() {
     
     processOfflineProgress();
     checkDailyStreak();
-    showSocialModal(); // Shows the hype popup
+    showJackpotModal(); // Shows the new jackpot announcement
     updateSocialHistoryUI(); // Renders the social history list
     loadReferralHistory(); // Load Frens history
     loadLeaderboards(); // Load Global Leaderboards
+    loadRaffleWinners(); // Load Raffle Winners
     updateUI();
     requestAnimationFrame(gameLoop);
 }
@@ -291,11 +292,25 @@ async function forceSaveToDB() {
 // ==========================================
 // 6. OFFLINE PROGRESSION
 // ==========================================
+function isPlayerActiveData(progress) {
+    if (!progress) return false;
+    let conditionsMet = 0;
+    if ((progress.adPowerGained || 0) >= 100) conditionsMet++;
+    if ((progress.crystalPlayed || 0) >= 5) conditionsMet++;
+    if ((progress.corePlayed || 0) >= 5) conditionsMet++;
+    if ((progress.bossDamage || 0) >= 100) conditionsMet++;
+    return conditionsMet >= 2;
+}
+
+function isPlayerActive() {
+    return isPlayerActiveData(state.dailyTasksProgress);
+}
+
 function processOfflineProgress() {
     const now = Date.now();
     const timeDiff = now - state.lastCalcTime;
     
-    if (timeDiff > 0 && state.gh > 0 && globalStats.totalMined < TOTAL_POOL) {
+    if (timeDiff > 0 && state.gh > 0 && globalStats.totalMined < TOTAL_POOL && isPlayerActive()) {
         const timeUntilOverheat = MAX_HEAT_MS - state.heatMs;
         const effectiveMiningTime = Math.max(0, Math.min(timeDiff, timeUntilOverheat));
         
@@ -371,7 +386,7 @@ function gameLoop() {
     const now = Date.now();
     const timeDiff = now - state.lastCalcTime;
     
-    if (globalStats.totalMined < TOTAL_POOL && state.gh > 0 && timeDiff > 0) {
+    if (globalStats.totalMined < TOTAL_POOL && state.gh > 0 && timeDiff > 0 && isPlayerActive()) {
         if (state.heatMs < MAX_HEAT_MS) {
             const streakMultiplier = 1.0 + Math.min(0.5, (state.streakDays - 1) * 0.1);
             const tempMultiplier = getCurrentMultiplier();
@@ -427,7 +442,15 @@ function updateUI() {
     if (tempMultiplier > 1) {
         els.streak.innerText += ` + ⚡ ${tempMultiplier.toFixed(1)}x Bonus`;
     }
-    els.dailyGen.innerText = (state.gh * COINS_PER_1_GH_PER_DAY * totalMultiplier).toFixed(2);
+    
+    const inactiveWarning = document.getElementById('inactive-warning');
+    if (isPlayerActive()) {
+        els.dailyGen.innerText = (state.gh * COINS_PER_1_GH_PER_DAY * totalMultiplier).toFixed(2);
+        if (inactiveWarning) inactiveWarning.style.display = 'none';
+    } else {
+        els.dailyGen.innerText = "0.00 (Inactive)";
+        if (inactiveWarning) inactiveWarning.style.display = 'block';
+    }
 
     const heatPercent = Math.min(100, (state.heatMs / MAX_HEAT_MS) * 100);
     els.heatPercent.innerText = heatPercent.toFixed(0) + "%";
@@ -467,6 +490,7 @@ function updateUI() {
 
     checkClaimAvailability();
     updateTasksUI();
+    updateRaffleUI();
 }
 
 function checkClaimAvailability() {
@@ -547,7 +571,73 @@ function saveAddress() {
 }
 
 // ==========================================
-// 10. TASKS UI
+// 10. RAFFLE JACKPOT UI
+// ==========================================
+function updateRaffleUI() {
+    const eligibilityEl = document.getElementById('raffle-eligibility');
+    if (!eligibilityEl) return;
+
+    const isActive = isPlayerActive();
+    const hasSol = state.solAddress && state.solAddress.length >= 30;
+
+    if (isActive && hasSol) {
+        eligibilityEl.innerHTML = `<span style="color: var(--accent-green); font-weight: bold; font-size: 16px;">✅ Qualified for today's draw! (1 Ticket)</span>`;
+    } else {
+        let reasons = [];
+        if (!isActive) reasons.push("Not Active 🔴");
+        if (!hasSol) reasons.push("No SOL Address");
+        eligibilityEl.innerHTML = `<span style="color: var(--accent-red); font-weight: bold; font-size: 14px;">❌ Not Qualified (${reasons.join(', ')})</span>`;
+    }
+}
+
+async function loadRaffleWinners() {
+    try {
+        const { data: winners, error } = await supabaseClient
+            .from('raffle_winners')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(5);
+
+        const listEl = document.getElementById('raffle-winners-list');
+        if (!listEl) return;
+
+        if (winners && winners.length > 0) {
+            listEl.innerHTML = winners.map(w => `
+                <div class="history-item">
+                    <div class="history-info">
+                        <span class="history-platform">${w.username ? '@'+w.username : 'User'}</span>
+                        <span class="status-badge status-approved">${new Date(w.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <div class="history-reward highlight-yellow">${w.reward || '0.002 SOL'}</div>
+                </div>
+            `).join('');
+        } else {
+            // Mock data format so the user sees how it looks
+            listEl.innerHTML = `
+                <div class="history-item">
+                    <div class="history-info">
+                        <span class="history-platform">@crypto_king</span>
+                        <span class="status-badge status-approved">Yesterday</span>
+                    </div>
+                    <div class="history-reward highlight-yellow">0.002 SOL</div>
+                </div>
+                <div class="history-item">
+                    <div class="history-info">
+                        <span class="history-platform">@miner_dude</span>
+                        <span class="status-badge status-approved">2 Days Ago</span>
+                    </div>
+                    <div class="history-reward highlight-yellow">0.002 SOL</div>
+                </div>
+                <p style="text-align:center; color:var(--text-muted); font-size:11px; margin-top: 10px;">(Add real winners to 'raffle_winners' table in Supabase)</p>
+            `;
+        }
+    } catch (err) {
+        console.error("Failed to load raffle winners", err);
+    }
+}
+
+// ==========================================
+// 10.5 TASKS UI
 // ==========================================
 function updateTasksUI() {
     const streakContainer = document.getElementById('streak-days-ui');
@@ -698,6 +788,10 @@ function updateTaskProgress(key, amount) {
         state.dailyTasksProgress[key] += amount;
         forceSaveToDB();
         updateTasksUI();
+        const profileTab = document.getElementById('profile-tab');
+        if (profileTab && profileTab.classList.contains('active')) {
+            updateProfileUI();
+        }
     }
 }
 
@@ -751,6 +845,24 @@ function completeTask(taskId, rewardType, rewardAmt, element) {
 // ==========================================
 // 10.5 VIRAL SOCIAL MINING LOGIC
 // ==========================================
+
+function showJackpotModal() {
+    // Only show once per user to avoid annoying them every reload
+    const hasSeenJackpot = localStorage.getItem(`seenJackpot_${tgUser.id}`);
+    if (!hasSeenJackpot) {
+        setTimeout(() => {
+            const modal = document.getElementById('jackpot-modal');
+            if (modal) modal.classList.remove('hidden');
+        }, 1000); 
+    }
+}
+
+function closeJackpotModal() {
+    haptic('light');
+    localStorage.setItem(`seenJackpot_${tgUser.id}`, 'true');
+    const modal = document.getElementById('jackpot-modal');
+    if (modal) modal.classList.add('hidden');
+}
 
 function showSocialModal() {
     setTimeout(() => {
@@ -942,6 +1054,33 @@ function updateProfileUI() {
     document.getElementById('profile-tokens').innerText = state.walletCoins.toFixed(2);
     document.getElementById('profile-refs').innerText = state.referralCount || 0;
     document.getElementById('profile-sol').innerText = state.solAddress || "None";
+
+    // Update Mining Status
+    const activeStatusEl = document.getElementById('profile-active-status');
+    if (activeStatusEl) {
+        if (isPlayerActive()) {
+            activeStatusEl.innerHTML = 'Active 🟢';
+            activeStatusEl.style.color = 'var(--accent-green)';
+        } else {
+            activeStatusEl.innerHTML = 'Inactive 🔴';
+            activeStatusEl.style.color = 'var(--accent-red)';
+        }
+    }
+
+    const adsProgress = Math.min(100, state.dailyTasksProgress?.adPowerGained || 0);
+    const crystalProgress = Math.min(5, state.dailyTasksProgress?.crystalPlayed || 0);
+    const coreProgress = Math.min(5, state.dailyTasksProgress?.corePlayed || 0);
+    const bossProgress = Math.min(100, state.dailyTasksProgress?.bossDamage || 0);
+
+    const elAds = document.getElementById('status-ads');
+    const elCrystal = document.getElementById('status-crystal');
+    const elCore = document.getElementById('status-core');
+    const elBoss = document.getElementById('status-boss');
+
+    if (elAds) elAds.innerText = `${Math.floor(adsProgress)}/100`;
+    if (elCrystal) elCrystal.innerText = `${Math.floor(crystalProgress)}/5`;
+    if (elCore) elCore.innerText = `${Math.floor(coreProgress)}/5`;
+    if (elBoss) elBoss.innerText = `${Math.floor(bossProgress)}/100`;
 
     renderLevels();
     renderAchievements();
@@ -1518,7 +1657,7 @@ async function loadLeaderboards() {
         // 1. Power Leaderboard
         const { data: topMiners, error: minersErr } = await supabaseClient
             .from('players')
-            .select('telegram_id, username, first_name, gh_power')
+            .select('telegram_id, username, first_name, gh_power, daily_tasks_progress')
             .order('gh_power', { ascending: false })
             .limit(10);
             
@@ -1531,11 +1670,12 @@ async function loadLeaderboards() {
                     const isMe = miner.telegram_id === tgUser.id;
                     const highlightStyle = isMe ? 'border-left: 3px solid var(--accent-yellow); background: rgba(255, 215, 0, 0.1);' : '';
                     const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`;
+                    const activeStatus = isPlayerActiveData(miner.daily_tasks_progress) ? '🟢' : '🔴';
                     
                     powerListEl.innerHTML += `
                         <div class="task-item" style="margin-bottom: 10px; ${highlightStyle}">
                             <div class="task-info">
-                                <span class="task-title" style="${isMe ? 'font-weight: bold; color: var(--accent-yellow);' : ''}">${medal} ${name} ${isMe ? '(You)' : ''}</span>
+                                <span class="task-title" style="${isMe ? 'font-weight: bold; color: var(--accent-yellow);' : ''}">${medal} ${name} ${activeStatus} ${isMe ? '(You)' : ''}</span>
                             </div>
                             <div class="task-status" style="color: var(--accent-yellow); font-weight: bold;">${miner.gh_power} GH/s</div>
                         </div>
@@ -1566,7 +1706,7 @@ async function loadLeaderboards() {
                 const topReferrerIds = sortedRefs.map(r => r[0]);
                 const { data: topReferrersData } = await supabaseClient
                     .from('players')
-                    .select('telegram_id, username, first_name')
+                    .select('telegram_id, username, first_name, daily_tasks_progress')
                     .in('telegram_id', topReferrerIds);
                     
                 const referrerMap = {};
@@ -1583,11 +1723,12 @@ async function loadLeaderboards() {
                     const isMe = String(ref[0]) === String(tgUser.id);
                     const highlightStyle = isMe ? 'border-left: 3px solid var(--accent-cyan); background: rgba(0, 255, 255, 0.1);' : '';
                     const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`;
+                    const activeStatus = pData ? (isPlayerActiveData(pData.daily_tasks_progress) ? '🟢' : '🔴') : '🔴';
 
                     refListEl.innerHTML += `
                         <div class="task-item" style="margin-bottom: 10px; ${highlightStyle}">
                             <div class="task-info">
-                                <span class="task-title" style="${isMe ? 'font-weight: bold; color: var(--accent-cyan);' : ''}">${medal} ${name} ${isMe ? '(You)' : ''}</span>
+                                <span class="task-title" style="${isMe ? 'font-weight: bold; color: var(--accent-cyan);' : ''}">${medal} ${name} ${activeStatus} ${isMe ? '(You)' : ''}</span>
                             </div>
                             <div class="task-status" style="color: var(--accent-cyan); font-weight: bold;">${ref[1]} Invites</div>
                         </div>

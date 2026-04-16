@@ -91,6 +91,9 @@
 
                         <div class="ability-section">
                             <h3>Mining Status</h3>
+                            <div id="inactive-warning" style="display: none; background: rgba(255, 68, 68, 0.1); border: 1px solid var(--accent-red); color: var(--accent-red); padding: 10px; border-radius: 8px; font-size: 12px; margin-bottom: 15px; text-align: center;">
+                                ⚠️ <b>Rig Inactive!</b> Complete daily tasks in your Profile to resume mining.
+                            </div>
                             <div class="ability-row">
                                 <div class="ability-info">
                                     <span>Daily Gen (Coins)</span>
@@ -206,7 +209,7 @@
                 <div class="sub-nav mb-20">
                     <button class="sub-nav-btn active" onclick="switchSubTab('tasks-view')">Tasks & Streak</button>
                     <button class="sub-nav-btn" onclick="switchSubTab('social-view')" style="color: var(--accent-purple);">Viral Social 🚀</button>
-                    <button class="sub-nav-btn" onclick="switchSubTab('shop-view')">Upgrades</button>
+                    <button class="sub-nav-btn" onclick="switchSubTab('raffle-view')" style="color: var(--accent-yellow);">Raffle Jackpot 🎟️</button>
                 </div>
 
                 <!-- TASKS VIEW -->
@@ -313,14 +316,34 @@
                     </div>
                 </div>
 
-                <!-- SHOP VIEW -->
-                <div id="shop-view" class="sub-tab-content hidden">
-                    <div class="maintenance-box">
-                        <div class="maintenance-icon">🚧</div>
-                        <h2>Under Maintenance</h2>
-                        <p class="subtitle">The engineers are currently overhauling the rig shop and upgrade center. Check back soon for powerful new hardware!</p>
-                        <div class="progress-bar mt-20"><div class="fill fill-yellow" style="width: 75%; animation: progressAnim 2s infinite alternate;"></div></div>
-                        <p style="font-size: 10px; color: var(--text-muted); margin-top: 10px;">Update Progress: 75%</p>
+                <!-- RAFFLE JACKPOT VIEW -->
+                <div id="raffle-view" class="sub-tab-content">
+                    <div class="feature-card" style="padding: 20px; border-color: var(--accent-yellow);">
+                        <h2 style="font-size: 20px;">🎟️ Daily <span class="highlight-yellow">SOL Jackpot</span></h2>
+                        <p class="subtitle mt-10">Every day, one lucky active miner wins <b>0.002 SOL</b>!</p>
+
+                        <div class="ability-section mt-10" style="background: var(--card-bg); padding: 15px; border-radius: 12px; border: 2px solid var(--card-border); box-shadow: var(--shadow-sm);">
+                            <h3 style="color: var(--accent-yellow); margin-bottom: 8px;">📜 THE RULES</h3>
+                            <ul style="font-size: 12px; margin-left: 20px; line-height: 1.6;">
+                                <li>You must be <b>Active 🟢</b> (complete 2 daily tasks).</li>
+                                <li>You must have submitted your <b>SOL Address</b> in the Profile tab.</li>
+                                <li>Active players automatically receive <b>1 Ticket</b> daily.</li>
+                            </ul>
+                        </div>
+
+                        <div class="mt-20" style="text-align: center; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+                            <h3 style="font-size: 14px; margin-bottom: 10px;">Your Status</h3>
+                            <div id="raffle-eligibility">
+                                <!-- JS will populate this -->
+                                <span style="color: var(--text-muted); font-size: 12px;">Checking eligibility...</span>
+                            </div>
+                        </div>
+
+                        <h3 style="font-size: 14px; margin-top: 30px; border-top: 2px dashed var(--card-border); padding-top: 20px;">🏆 Previous Winners</h3>
+                        <div id="raffle-winners-list" class="history-list mt-10">
+                            <!-- JS will populate this -->
+                            <p style="text-align:center; color:var(--text-muted); font-size:12px;">Loading winners...</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -624,6 +647,36 @@
                             <span class="stat-icon">🔗</span>
                             <span id="profile-sol" style="font-size: 10px; word-break: break-all;">None</span>
                         </div>
+
+                        <!-- NEW: MINING STATUS SECTION -->
+                        <div class="feature-card mt-20" style="border: 1px solid var(--card-border); background: rgba(0,0,0,0.2);">
+                            <div class="card-content" style="width: 100%; padding: 15px;">
+                                <h3 style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                                    Mining Status
+                                    <span id="profile-active-status" style="font-size: 12px; padding: 4px 8px; border-radius: 12px; background: rgba(255,255,255,0.1);">Checking...</span>
+                                </h3>
+                                <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">Complete any 2 of these daily tasks to keep your rig mining!</p>
+                                
+                                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span>📺 Watch Ads (100 GH)</span>
+                                        <span id="status-ads" style="color: var(--accent-yellow);">0/100</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span>💎 Play Crystal Overload</span>
+                                        <span id="status-crystal" style="color: var(--accent-cyan);">0/5</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span>🎯 Play Core Alignment</span>
+                                        <span id="status-core" style="color: var(--accent-green);">0/5</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span>⚔️ Deal Boss Damage</span>
+                                        <span id="status-boss" style="color: var(--accent-red);">0/100</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -738,6 +791,26 @@
         </div>
 
         <!-- NEW: Boss Raid & Level System Popup -->
+        <!-- JACKPOT ANNOUNCEMENT MODAL -->
+        <div id="jackpot-modal" class="modal hidden">
+            <div class="modal-card" style="border: 2px solid var(--accent-yellow);">
+                <div style="font-size: 60px; filter: drop-shadow(4px 4px 0px #111);">🎟️</div>
+                <h2 style="color: var(--accent-yellow); margin-bottom: 5px; font-weight: 900;">Daily SOL Jackpot!</h2>
+                
+                <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px;">
+                    A new way to win has arrived! 🚀<br><br>
+                    💰 <b>0.002 SOL Daily:</b> One lucky active miner will win the jackpot every single day!<br><br>
+                    🟢 <b>Stay Active:</b> Complete 2 daily tasks to get your <b>Active</b> status and automatically receive 1 entry ticket.<br><br>
+                    Check the <b>Raffle Jackpot</b> section in the Tasks tab to see your eligibility and previous winners!
+                </p>
+                
+                <button class="btn btn-action" style="background: var(--accent-yellow); color: #111;" onclick="closeJackpotModal()">
+                    Awesome! Let's Mine ⛏️
+                </button>
+            </div>
+        </div>
+
+        <!-- SOCIAL MODAL (Previous Announcement) -->
         <div id="social-modal" class="modal hidden">
             <div class="modal-card">
                 <div style="font-size: 60px; filter: drop-shadow(4px 4px 0px #111);">👹</div>
