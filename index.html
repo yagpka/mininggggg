@@ -783,10 +783,40 @@
         </nav>
 
         <!-- Loading Screen -->
-        <div id="loading-screen" class="modal">
-            <div class="modal-card">
-                <div class="loading-ring"></div>
-                <p style="font-weight: 800; letter-spacing: 1px; margin-top: 10px;">SYNCING DATA...</p>
+        <div id="loading-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-light); z-index: 99999; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+            <style>
+                @keyframes mine-action {
+                    0% { transform: rotate(0deg) translateY(0); }
+                    25% { transform: rotate(-45deg) translateY(-20px); }
+                    50% { transform: rotate(20deg) translateY(10px); }
+                    100% { transform: rotate(0deg) translateY(0); }
+                }
+                @keyframes skeleton-shimmer {
+                    0% { background-position: -200px 0; }
+                    100% { background-position: calc(200px + 100%) 0; }
+                }
+                @keyframes pulse-opacity {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.5; }
+                }
+                .skeleton-bar {
+                    width: 200px;
+                    height: 24px;
+                    border-radius: 12px;
+                    background: #e0e0e0;
+                    background-image: linear-gradient(90deg, #e0e0e0 0px, #f8f8f8 40px, #e0e0e0 80px);
+                    background-size: 200px 100%;
+                    animation: skeleton-shimmer 1.5s infinite linear;
+                    border: 2px solid var(--card-border);
+                    box-shadow: var(--shadow-sm);
+                }
+            </style>
+            <div style="font-size: 80px; margin-bottom: 20px; filter: drop-shadow(4px 4px 0px var(--shadow-color)); animation: mine-action 1s infinite;">⛏️</div>
+            <h1 style="color: var(--text-main); font-size: 42px; margin-bottom: 10px; text-transform: uppercase; text-shadow: 3px 3px 0px rgba(0,0,0,0.1);">Miners Hub</h1>
+            
+            <div id="splash-loading" style="display: flex; flex-direction: column; align-items: center; margin-top: 20px;">
+                <div class="skeleton-bar"></div>
+                <p style="font-weight: 800; letter-spacing: 1px; margin-top: 15px; color: var(--text-muted); animation: pulse-opacity 1.5s infinite;">SYNCING DATA...</p>
             </div>
         </div>
 

@@ -238,18 +238,38 @@ async function loadGameData() {
         }
     }
 
-    const loader = document.getElementById('loading-screen');
-    if(loader) loader.classList.add('hidden');
+    isGameDataLoaded = true;
+    checkSplashReady();
     
     processOfflineProgress();
     checkDailyStreak();
-    showJackpotModal(); // Shows the new jackpot announcement
     updateSocialHistoryUI(); // Renders the social history list
     loadReferralHistory(); // Load Frens history
     loadLeaderboards(); // Load Global Leaderboards
     loadRaffleWinners(); // Load Raffle Winners
     updateUI();
     requestAnimationFrame(gameLoop);
+}
+
+let isGameDataLoaded = false;
+let isSplashTimerDone = false;
+
+function checkSplashReady() {
+    if (isGameDataLoaded && isSplashTimerDone) {
+        enterGame();
+    }
+}
+
+setTimeout(() => {
+    isSplashTimerDone = true;
+    checkSplashReady();
+}, 3000);
+
+function enterGame() {
+    haptic('heavy');
+    const loader = document.getElementById('loading-screen');
+    if(loader) loader.classList.add('hidden');
+    showJackpotModal(); // Shows the new jackpot announcement
 }
 
 let saveTimeout;
@@ -847,19 +867,12 @@ function completeTask(taskId, rewardType, rewardAmt, element) {
 // ==========================================
 
 function showJackpotModal() {
-    // Only show once per user to avoid annoying them every reload
-    const hasSeenJackpot = localStorage.getItem(`seenJackpot_${tgUser.id}`);
-    if (!hasSeenJackpot) {
-        setTimeout(() => {
-            const modal = document.getElementById('jackpot-modal');
-            if (modal) modal.classList.remove('hidden');
-        }, 1000); 
-    }
+    const modal = document.getElementById('jackpot-modal');
+    if (modal) modal.classList.remove('hidden');
 }
 
 function closeJackpotModal() {
     haptic('light');
-    localStorage.setItem(`seenJackpot_${tgUser.id}`, 'true');
     const modal = document.getElementById('jackpot-modal');
     if (modal) modal.classList.add('hidden');
 }
