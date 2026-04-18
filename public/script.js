@@ -102,6 +102,16 @@ let globalStats = {
 // ==========================================
 // 4. STATE MANAGEMENT (Local Player)
 // ==========================================
+const actionCooldowns = {};
+function isRateLimited(action, msLimit) {
+    const now = Date.now();
+    if (actionCooldowns[action] && now < actionCooldowns[action]) {
+        return true;
+    }
+    actionCooldowns[action] = now + msLimit;
+    return false;
+}
+
 let state = {
     gh: 0, pendingCoins: 0, walletCoins: 0, totalMinedFromPool: 0,
     lives: 0, solAddress: "", lastCalcTime: Date.now(), heatMs: 0,               
@@ -197,14 +207,52 @@ async function loadGameData() {
 
         // 1. Fetch Player Data
         const tgIdNum = Number(tgUser.id);
+        const tgIdStr = String(tgUser.id);
         const cleanFirst = String(tgUser.first_name || "Unknown").slice(0, 100).replace(/[<>]/g, '');
         const cleanUser = String(tgUser.username || "unknown").slice(0, 100).replace(/[<>]/g, '');
 
-        const { data, error } = await supabaseClient.rpc('get_or_create_player', {
+        let data, error;
+        
+        // Try RPC first
+        const rpcResult = await supabaseClient.rpc('get_or_create_player', {
             p_telegram_id: tgIdNum,
             p_first_name: cleanFirst,
             p_username: cleanUser
         });
+        
+        data = rpcResult.data;
+        error = rpcResult.error;
+
+        // If RPG fails due to overloading (PGRST203) or RLS, fallback to manual read/write
+        if (error && (error.code === 'PGRST203' || error.message.includes('candidate function'))) {
+            console.warn("RPC overloaded/failed, falling back to manual select/insert");
+            
+            // Try fetching by bigint first
+            let { data: selectData, error: selectErr } = await supabaseClient.from('players').select('*').eq('telegram_id', tgIdNum);
+            
+            // If nothing found or error, try fetching by text
+            if (!selectData || selectData.length === 0) {
+                const textLookup = await supabaseClient.from('players').select('*').eq('telegram_id', tgIdStr);
+                if (textLookup.data && textLookup.data.length > 0) {
+                    selectData = textLookup.data;
+                }
+            }
+
+            if (selectData && selectData.length > 0) {
+                data = selectData;
+                error = null;
+            } else {
+                // User doesn't exist, try manual insertion
+                const { data: insertData, error: insertErr } = await supabaseClient.from('players').insert([{
+                    telegram_id: tgIdNum,
+                    first_name: cleanFirst,
+                    username: cleanUser
+                }]).select();
+                
+                data = insertData;
+                error = insertErr;
+            }
+        }
 
         if (error) throw error;
 
@@ -558,20 +606,25 @@ function checkClaimAvailability() {
 }
 
 function claimCoins() {
+    if (isRateLimited('claimCoins', 2000)) return;
     if (state.pendingCoins < 0.9999) return;
     haptic('success');
-    state.walletCoins += state.pendingCoins; 
+    
+    // Fallback visually, but sync securely
+    const claimAmount = state.pendingCoins;
     state.pendingCoins = 0;
     
-    // Explicitly update wallet_coins since forceSaveToDB no longer does
-    supabaseClient.from('players').update({
-        wallet_coins: state.walletCoins,
-        pending_coins: 0
-    }).eq('telegram_id', tgUser.id);
-    
-    forceSaveToDB(); 
-    updateUI();
-    appAlert("Coins successfully added to your wallet!");
+    supabaseClient.rpc('secure_claim_coins', { p_telegram_id: tgUser.id, p_amount: claimAmount }).then(({data, error}) => {
+        if (!error && data && data.success) {
+            state.walletCoins = data.new_wallet;
+            forceSaveToDB(); 
+            updateUI();
+            appAlert("Coins successfully added to your wallet securely!");
+        } else {
+            console.error("RPC failed securely:", error);
+            appAlert("Error claiming coins. Try again.");
+        }
+    });
 }
 
 function switchTab(tabId) {
@@ -784,6 +837,7 @@ function updateTasksUI() {
 }
 
 async function claimTaskReward(taskId, type) {
+    if (isRateLimited('claimTask', 2000)) return; // 2 sec cooldown
     haptic('success');
     let task = null;
     
@@ -810,19 +864,15 @@ async function claimTaskReward(taskId, type) {
             if (data && data.success) {
                 state.gh = data.new_gh;
             } else {
-                state.gh += task.reward.amount;
-                await supabaseClient.from('players').update({ gh_power: state.gh }).eq('telegram_id', tgUser.id);
+                throw new Error("RPC failed securely.");
             }
         } else if (task.reward.type === 'coins') {
             state.walletCoins += task.reward.amount;
             await supabaseClient.from('players').update({ wallet_coins: state.walletCoins }).eq('telegram_id', tgUser.id);
         }
     } catch (err) {
-        console.warn("Reward RPC failed, falling back to client-side:", err);
-        if (task.reward.type === 'gh') {
-            state.gh += task.reward.amount;
-            await supabaseClient.from('players').update({ gh_power: state.gh }).eq('telegram_id', tgUser.id);
-        }
+        console.error("Reward RPC failed. Reward not granted:", err);
+        return; // Stop if failed securely
     }
 
     forceSaveToDB();
@@ -869,20 +919,11 @@ function completeTask(taskId, rewardType, rewardAmt, element) {
                 throw new Error(error ? error.message : "RPC failed");
             }
         } catch (err) {
-            console.warn("Falling back to client-side task completion:", err);
-            if (rewardType === 'gh') { state.gh += rewardAmt; appAlert(`Task Verified! +${rewardAmt} GH Power.`); } 
-            else if (rewardType === 'coins') { state.walletCoins += rewardAmt; appAlert(`Task Verified! +${rewardAmt} Coins added to wallet.`); } 
-            else if (rewardType === 'lives') { state.lives += rewardAmt; appAlert(`Task Verified! +${rewardAmt} Lives added.`); }
-            
-            state.completedTasks.push(taskId);
-            
-            // Explicitly save sensitive fields since forceSaveToDB no longer does
-            await supabaseClient.from('players').update({
-                gh_power: state.gh,
-                wallet_coins: state.walletCoins,
-                lives: state.lives,
-                completed_tasks: state.completedTasks
-            }).eq('telegram_id', tgUser.id);
+            console.error("Task RPC failed securely:", err);
+            appAlert(`Error verifying task. Try again later.`);
+            // DO NOT fallback to client-side. The backend MUST handle this.
+            btn.innerText = "Check";
+            return;
         }
         
         if(rewardType === 'gh') fetchGlobalStats();
@@ -1016,14 +1057,12 @@ function openRewardBox() {
             grantBoxReward();
         }).catch((err) => {
             console.error("Ad error:", err);
-            // If ad fails, we still want them to be able to open it but maybe with a warning
-            // or just let them open it if it's a technical error
-            appAlert("Ad failed to load, but we'll let you open it this time! 🎁");
-            grantBoxReward();
+            // Strict compliance: Do not give rewards if ad isn't shown
+            appAlert("Ad failed to load or was skipped. Reward cancelled.");
         });
     } else {
-        // Fallback if ad system fails
-        grantBoxReward();
+        appAlert("Ad block system is blocked. Cannot open box.");
+        initAds();
     }
 }
 
@@ -1047,12 +1086,19 @@ function grantBoxReward() {
             endTime: Date.now() + (reward.duration * 60 * 1000),
             label: reward.label
         });
+        forceSaveToDB();
+        updateUI();
     } else {
-        state.walletCoins += reward.amount;
-        // Explicitly update wallet_coins
-        supabaseClient.from('players').update({
-            wallet_coins: state.walletCoins
-        }).eq('telegram_id', tgUser.id);
+        // Secure token allocation
+        supabaseClient.rpc('secure_task_reward_coins', { p_telegram_id: tgUser.id, p_amount: reward.amount }).then(({data, error}) => {
+            if (!error && data && data.success) {
+                state.walletCoins = data.new_coins;
+                forceSaveToDB();
+                updateUI();
+            } else {
+                console.error("Failed to secure box reward:", error);
+            }
+        });
     }
     
     // Show Popup
@@ -1188,6 +1234,7 @@ function renderAchievements() {
 }
 
 async function claimLevel(lvlId) {
+    if (isRateLimited('claimLevel', 2000)) return;
     const lvl = LEVELS.find(l => l.id === lvlId);
     if (!lvl || state.walletCoins < lvl.req || state.claimedLevels.includes(lvlId)) return;
 
@@ -1208,6 +1255,7 @@ async function claimLevel(lvlId) {
 }
 
 async function claimAchievement(achId) {
+    if (isRateLimited('claimAchievement', 2000)) return;
     const ach = ACHIEVEMENTS.find(a => a.id === achId);
     if (!ach || state.claimedAchievements.includes(achId)) return;
 
@@ -1221,8 +1269,7 @@ async function claimAchievement(achId) {
             if (data && data.success) {
                 state.gh = data.new_gh;
             } else {
-                state.gh += ach.reward.amount;
-                await supabaseClient.from('players').update({ gh_power: state.gh }).eq('telegram_id', tgUser.id);
+                throw new Error("RPC failed securely.");
             }
         } else if (ach.reward.type === 'tokens') {
             state.walletCoins += ach.reward.amount;
@@ -1231,11 +1278,8 @@ async function claimAchievement(achId) {
             state.permanentMultiplier += ach.reward.amount;
         }
     } catch (err) {
-        console.warn("Achievement RPC failed, falling back to client-side:", err);
-        if (ach.reward.type === 'gh') {
-            state.gh += ach.reward.amount;
-            await supabaseClient.from('players').update({ gh_power: state.gh }).eq('telegram_id', tgUser.id);
-        }
+        console.error("Achievement RPC failed securely:", err);
+        return; // Stop if failed securely to prevent hack
     }
 
     forceSaveToDB();
@@ -1386,7 +1430,20 @@ function initAds() {
 initAds();
 
 function watchAd(type) {
+    if (isRateLimited('watchAd', 1000)) return; // Prevents double click while loading
     if (globalStats.totalMined >= TOTAL_POOL) return appAlert("Game Over! The 300M Pool is depleted.");
+    
+    // Check Caps
+    const progress = state.dailyTasksProgress || {};
+    if (type === 'mining') {
+        if ((progress.adPowerGained || 0) >= 200) { // 20 ads * 10 GH
+            return appAlert("Daily Limit! You have reached your max of 20 GH power ads today.");
+        }
+    } else if (type === 'lives') {
+        if ((progress.adLivesGained || 0) >= 10) { // 10 ads for lives
+            return appAlert("Daily Limit! You have reached your max of 10 Lives ads today.");
+        }
+    }
     
     // Check Cooldown
     const now = Date.now();
@@ -1475,10 +1532,9 @@ function grantReward(type) {
                     state.gh = data.new_gh;
                     appAlert("+10 GH Power unlocked securely!");
                 } else {
-                    console.warn("RPC failed, falling back to client-side:", error);
-                    state.gh += 10;
-                    supabaseClient.from('players').update({ gh_power: state.gh }).eq('telegram_id', tgUser.id);
-                    appAlert("+10 GH Power unlocked!");
+                    console.error("RPC failed securely:", error);
+                    appAlert("Error claiming reward. Try again.");
+                    return;
                 }
                 updateTaskProgress('adPowerGained', 10);
                 fetchGlobalStats();
@@ -1487,11 +1543,18 @@ function grantReward(type) {
             });
     } 
     else if (type === 'lives') { 
-        state.lives += 5; 
-        supabaseClient.from('players').update({ lives: state.lives }).eq('telegram_id', tgUser.id);
-        appAlert("+5 Lives added!"); 
-        forceSaveToDB();
-        updateUI();
+        supabaseClient.rpc('secure_ad_reward_lives', { p_telegram_id: tgUser.id, p_amount: 5 }).then(({data, error}) => {
+            if (!error && data && data.success) {
+                state.lives = data.new_lives;
+                appAlert("+5 Lives added securely!");
+                updateTaskProgress('adLivesGained', 1);
+                forceSaveToDB();
+                updateUI();
+            } else {
+                console.error("RPC failed securely:", error);
+                appAlert("Error claiming lives. Try again.");
+            }
+        });
     }
 }
 
@@ -1517,9 +1580,23 @@ function exitGame() {
     gameMenu.classList.remove('hidden');
 }
 
-function deductLife() {
+function deductLife(gameType) {
     if (globalStats.totalMined >= TOTAL_POOL) { appAlert("Pool depleted!"); return false; }
     if (state.lives <= 0) { appAlert("No lives! Watch an ad to get more."); return false; }
+
+    const progress = state.dailyTasksProgress || {};
+    if (gameType === 'crystal') {
+        if ((progress.crystalPlayed || 0) >= 25) {
+            appAlert("Daily Limit! Crystal Overload is capped at 25 chances per day.");
+            return false;
+        }
+    } else if (gameType === 'core') {
+        if ((progress.corePlayed || 0) >= 25) {
+            appAlert("Daily Limit! Core Alignment is capped at 25 chances per day.");
+            return false;
+        }
+    }
+
     state.lives -= 1; forceSaveToDB(); updateUI(); return true;
 }
 
@@ -1536,7 +1613,8 @@ function initGame1() {
 }
 
 function startGame1() {
-    if (!deductLife()) return exitGame();
+    if (isRateLimited('startGame', 2000)) return;
+    if (!deductLife('crystal')) return exitGame();
     haptic('medium'); g1Active = true; g1StartBtn.classList.add('hidden');
     g1Target.classList.remove('crystal-disabled'); g1Inst.innerText = "TAP FAST!!";
     
@@ -1558,9 +1636,18 @@ function endGame1(won) {
     g1Active = false; g1Target.classList.add('crystal-disabled');
     if (won) {
         haptic('success'); const reward = Math.floor(Math.random() * 5) + 1; 
-        state.gh += reward; g1Inst.innerText = `OVERLOAD! +${reward} GH`; g1Inst.style.color = "var(--accent-cyan)"; 
-        fetchGlobalStats(); 
-        forceSaveToDB(); 
+        g1Inst.innerText = `OVERLOADING...`;
+        supabaseClient.rpc('secure_ad_reward', { p_telegram_id: tgUser.id, p_amount: reward }).then(({data, error}) => {
+            if (!error && data && data.success) {
+                state.gh = data.new_gh;
+                g1Inst.innerText = `OVERLOAD! +${reward} GH`; 
+                g1Inst.style.color = "var(--accent-cyan)";
+                fetchGlobalStats(); 
+                forceSaveToDB(); 
+            } else {
+                g1Inst.innerText = "Error syncing reward.";
+            }
+        });
     } else {
         haptic('error'); g1Inst.innerText = "Failed! Core stabilized."; g1Inst.style.color = "var(--accent-red)";
     }
@@ -1578,7 +1665,8 @@ function initGame2() {
 }
 
 function startGame2() {
-    if (!deductLife()) return exitGame();
+    if (isRateLimited('startGame', 2000)) return;
+    if (!deductLife('core')) return exitGame();
     haptic('medium'); g2Active = true; g2StartBtn.classList.add('hidden');
     g2Inst.innerText = "TAP TRACK TO STOP!"; g2Track.style.pointerEvents = "auto";
     g2Speed = Math.random() * 1.5 + 2; 
@@ -1600,9 +1688,18 @@ function stopSlider() {
     g2Active = false; cancelAnimationFrame(g2AnimFrame);
     if (g2Pos >= 40 && g2Pos <= 60) {
         haptic('success'); const reward = Math.floor(Math.random() * 5) + 1;
-        state.gh += reward; g2Inst.innerText = `PERFECT! +${reward} GH`; g2Inst.style.color = "var(--accent-green)"; 
-        fetchGlobalStats(); 
-        forceSaveToDB(); 
+        g2Inst.innerText = `SYNCING...`;
+        supabaseClient.rpc('secure_ad_reward', { p_telegram_id: tgUser.id, p_amount: reward }).then(({data, error}) => {
+            if (!error && data && data.success) {
+                state.gh = data.new_gh;
+                g2Inst.innerText = `PERFECT! +${reward} GH`; 
+                g2Inst.style.color = "var(--accent-green)"; 
+                fetchGlobalStats(); 
+                forceSaveToDB(); 
+            } else {
+                g2Inst.innerText = "Error syncing reward.";
+            }
+        });
     } else {
         haptic('error'); g2Inst.innerText = "Missed the Core!"; g2Inst.style.color = "var(--accent-red)";
     }
@@ -1611,6 +1708,7 @@ function stopSlider() {
 }
 
 function withdraw() {
+    if (isRateLimited('withdraw', 5000)) return; // 5 sec cooldown
     if (globalStats.totalMined < TOTAL_POOL) return appAlert("The Global Pool is not finished yet. Keep mining!");
     if (!state.solAddress) return appAlert("Please save your SOL address first to process withdrawal!");
     if (state.walletCoins <= 0) return appAlert("Your wallet is empty!");
@@ -1968,14 +2066,23 @@ function updateSpawnTimer(nextSpawn) {
 }
 
 function attackBoss() {
+    if (isRateLimited('attackBoss', 100)) return; // 100ms cooldown max 10 CPS
     const availableTaps = state.bossTaps - state.pendingBossTaps;
     if (!currentBoss || availableTaps <= 0) {
         if (availableTaps <= 0) appAlert("You need Taps to attack! Watch an ad to get 100 Taps.");
         return;
     }
 
-    haptic('light');
     const damage = 0.1;
+
+    // Check if daily damage cap is reached (1000 per day)
+    const progress = state.dailyTasksProgress || {};
+    if ((progress.bossDamage || 0) + damage > 1000) {
+        appAlert("Daily Limit! You have reached your max 1000 boss damage for today.");
+        return;
+    }
+
+    haptic('light');
     
     // Visual feedback
     const visual = document.getElementById('boss-visual');
@@ -2127,6 +2234,7 @@ async function distributeBossRewards(boss) {
 }
 
 function watchAdForTaps() {
+    if (isRateLimited('watchAd', 1000)) return;
     if (adBlockMining) {
         appAlert("Loading ad for 100 Taps... 📺");
         adBlockMining.show().then(() => {
@@ -2136,15 +2244,26 @@ function watchAdForTaps() {
             appAlert("Ad failed to load. Try again later.");
         });
     } else {
-        grantTaps();
+        appAlert("Ad system is blocked or still loading. Cannot grant Taps without an ad!");
+        initAds();
     }
 }
 
 async function grantTaps() {
-    state.bossTaps += 100;
-    await supabaseClient.from('players').update({ boss_taps: state.bossTaps }).eq('telegram_id', tgUser.id);
-    updateBossUI();
-    appAlert("Success! +100 Taps granted. ⚔️");
+    try {
+        const { data, error } = await supabaseClient.rpc('secure_ad_reward_taps', { p_telegram_id: tgUser.id, p_amount: 100 });
+        if (error) throw error;
+        if (data && data.success) {
+            state.bossTaps = data.new_taps;
+            updateBossUI();
+            appAlert("Success! +100 Taps granted securely. ⚔️");
+        } else {
+            throw new Error("RPC failed securely.");
+        }
+    } catch (err) {
+        console.error("Failed to grant taps securely:", err);
+        appAlert("Error syncing taps. Please try again.");
+    }
 }
 
 async function spawnNewBoss() {
