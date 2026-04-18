@@ -2209,7 +2209,11 @@ async function syncBossData() {
 
         // Successfully synced
         if (data && data.boss_died) {
-            appAlert("VICTORY! The boss has been defeated! The network is distributing rewards.");
+            appAlert("VICTORY! The boss has been defeated! The network securely distributed rewards.");
+            if (data.new_coins !== undefined) {
+                state.walletCoins = data.new_coins;
+                updateUI();
+            }
             fetchBossData(); // Refreshes boss state and UI
         }
     } catch (err) {
