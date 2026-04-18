@@ -415,8 +415,8 @@ function isPlayerActiveData(progress) {
     if (!progress) return false;
     let conditionsMet = 0;
     if ((progress.adPowerGained || 0) >= 100) conditionsMet++;
-    if ((progress.crystalPlayed || 0) >= 5) conditionsMet++;
-    if ((progress.corePlayed || 0) >= 5) conditionsMet++;
+    if ((progress.crystalPlayed || 0) >= 30) conditionsMet++;
+    if ((progress.corePlayed || 0) >= 30) conditionsMet++;
     if ((progress.bossDamage || 0) >= 100) conditionsMet++;
     return conditionsMet >= 2;
 }
@@ -1190,8 +1190,8 @@ function updateProfileUI() {
     }
 
     const adsProgress = Math.min(100, state.dailyTasksProgress?.adPowerGained || 0);
-    const crystalProgress = Math.min(5, state.dailyTasksProgress?.crystalPlayed || 0);
-    const coreProgress = Math.min(5, state.dailyTasksProgress?.corePlayed || 0);
+    const crystalProgress = Math.min(30, state.dailyTasksProgress?.crystalPlayed || 0);
+    const coreProgress = Math.min(30, state.dailyTasksProgress?.corePlayed || 0);
     const bossProgress = Math.min(100, state.dailyTasksProgress?.bossDamage || 0);
 
     const elAds = document.getElementById('status-ads');
@@ -1200,8 +1200,8 @@ function updateProfileUI() {
     const elBoss = document.getElementById('status-boss');
 
     if (elAds) elAds.innerText = `${Math.floor(adsProgress)}/100`;
-    if (elCrystal) elCrystal.innerText = `${Math.floor(crystalProgress)}/5`;
-    if (elCore) elCore.innerText = `${Math.floor(coreProgress)}/5`;
+    if (elCrystal) elCrystal.innerText = `${Math.floor(crystalProgress)}/30`;
+    if (elCore) elCore.innerText = `${Math.floor(coreProgress)}/30`;
     if (elBoss) elBoss.innerText = `${Math.floor(bossProgress)}/100`;
 
     renderLevels();
@@ -1624,13 +1624,13 @@ function deductLife(gameType) {
 
     const progress = state.dailyTasksProgress || {};
     if (gameType === 'crystal') {
-        if ((progress.crystalPlayed || 0) >= 25) {
-            appAlert("Daily Limit! Crystal Overload is capped at 25 chances per day.");
+        if ((progress.crystalPlayed || 0) >= 50) {
+            appAlert("Daily Limit! Crystal Overload is capped at 50 chances per day.");
             return false;
         }
     } else if (gameType === 'core') {
-        if ((progress.corePlayed || 0) >= 25) {
-            appAlert("Daily Limit! Core Alignment is capped at 25 chances per day.");
+        if ((progress.corePlayed || 0) >= 50) {
+            appAlert("Daily Limit! Core Alignment is capped at 50 chances per day.");
             return false;
         }
     }
