@@ -614,9 +614,9 @@ function claimCoins() {
     const claimAmount = state.pendingCoins;
     state.pendingCoins = 0;
     
-    supabaseClient.rpc('secure_claim_coins', { p_telegram_id: tgUser.id, p_amount: claimAmount }).then(({data, error}) => {
+    supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'pool_coins', p_amount: claimAmount, p_id: '' }).then(({data, error}) => {
         if (!error && data && data.success) {
-            state.walletCoins = data.new_wallet;
+            state.walletCoins = data.new_coins;
             forceSaveToDB(); 
             updateUI();
             appAlert("Coins successfully added to your wallet securely!");
@@ -859,7 +859,7 @@ async function claimTaskReward(taskId, type) {
 
     try {
         if (task.reward.type === 'gh') {
-            const { data, error } = await supabaseClient.rpc('secure_ad_reward', { p_telegram_id: tgUser.id, p_amount: task.reward.amount });
+            const { data, error } = await supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'task_gh', p_amount: task.reward.amount, p_id: task.id });
             if (error) throw error;
             if (data && data.success) {
                 state.gh = data.new_gh;
@@ -867,8 +867,12 @@ async function claimTaskReward(taskId, type) {
                 throw new Error("RPC failed securely.");
             }
         } else if (task.reward.type === 'coins') {
-            state.walletCoins += task.reward.amount;
-            await supabaseClient.from('players').update({ wallet_coins: state.walletCoins }).eq('telegram_id', tgUser.id);
+            const { data, error } = await supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'task_coins', p_amount: task.reward.amount, p_id: task.id });
+            if (!error && data && data.success) {
+                state.walletCoins = data.new_coins;
+            } else {
+                throw new Error("RPC failed securely.");
+            }
         }
     } catch (err) {
         console.error("Reward RPC failed. Reward not granted:", err);
@@ -904,15 +908,17 @@ function completeTask(taskId, rewardType, rewardAmt, element) {
         
         // SECURITY UPDATE: Use RPC if available
         try {
-            const { data, error } = await supabaseClient.rpc('secure_task_reward', {
+            const { data, error } = await supabaseClient.rpc('secure_grant_reward', {
                 p_telegram_id: tgUser.id,
-                p_task_id: taskId
+                p_type: rewardType === 'coins' ? 'task_coins' : (rewardType === 'lives' ? 'task_lives' : 'task_gh'),
+                p_amount: rewardAmt,
+                p_id: taskId
             });
             
             if (!error && data && data.success) {
-                state.gh = data.new_gh;
-                state.walletCoins = data.new_coins;
-                state.lives = data.new_lives;
+                if (data.new_gh !== undefined) state.gh = data.new_gh;
+                if (data.new_coins !== undefined) state.walletCoins = data.new_coins;
+                if (data.new_lives !== undefined) state.lives = data.new_lives;
                 state.completedTasks.push(taskId);
                 appAlert(`Task Verified Securely!`);
             } else {
@@ -1090,7 +1096,7 @@ function grantBoxReward() {
         updateUI();
     } else {
         // Secure token allocation
-        supabaseClient.rpc('secure_task_reward_coins', { p_telegram_id: tgUser.id, p_amount: reward.amount }).then(({data, error}) => {
+        supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'box_coins', p_amount: reward.amount, p_id: '' }).then(({data, error}) => {
             if (!error && data && data.success) {
                 state.walletCoins = data.new_coins;
                 forceSaveToDB();
@@ -1264,7 +1270,7 @@ async function claimAchievement(achId) {
 
     try {
         if (ach.reward.type === 'gh') {
-            const { data, error } = await supabaseClient.rpc('secure_ad_reward', { p_telegram_id: tgUser.id, p_amount: ach.reward.amount });
+            const { data, error } = await supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'achievement_gh', p_amount: ach.reward.amount, p_id: ach.id });
             if (error) throw error;
             if (data && data.success) {
                 state.gh = data.new_gh;
@@ -1272,8 +1278,12 @@ async function claimAchievement(achId) {
                 throw new Error("RPC failed securely.");
             }
         } else if (ach.reward.type === 'tokens') {
-            state.walletCoins += ach.reward.amount;
-            await supabaseClient.from('players').update({ wallet_coins: state.walletCoins }).eq('telegram_id', tgUser.id);
+            const { data, error } = await supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'achievement_coins', p_amount: ach.reward.amount, p_id: ach.id });
+            if (!error && data && data.success) {
+                state.walletCoins = data.new_coins;
+            } else {
+                throw new Error("RPC failed securely.");
+            }
         } else if (ach.reward.type === 'mult') {
             state.permanentMultiplier += ach.reward.amount;
         }
@@ -1526,7 +1536,7 @@ function grantReward(type) {
     haptic('heavy');
     if (type === 'mining') { 
         // SECURITY UPDATE: Use RPC to prevent arbitrary GH injection
-        supabaseClient.rpc('secure_ad_reward', { p_telegram_id: tgUser.id })
+        supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'ad_gh', p_amount: 10, p_id: '' })
             .then(({ data, error }) => {
                 if (!error && data && data.success) {
                     state.gh = data.new_gh;
@@ -1543,7 +1553,7 @@ function grantReward(type) {
             });
     } 
     else if (type === 'lives') { 
-        supabaseClient.rpc('secure_ad_reward_lives', { p_telegram_id: tgUser.id, p_amount: 5 }).then(({data, error}) => {
+        supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'ad_lives', p_amount: 5, p_id: '' }).then(({data, error}) => {
             if (!error && data && data.success) {
                 state.lives = data.new_lives;
                 appAlert("+5 Lives added securely!");
@@ -1637,7 +1647,7 @@ function endGame1(won) {
     if (won) {
         haptic('success'); const reward = Math.floor(Math.random() * 5) + 1; 
         g1Inst.innerText = `OVERLOADING...`;
-        supabaseClient.rpc('secure_ad_reward', { p_telegram_id: tgUser.id, p_amount: reward }).then(({data, error}) => {
+        supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'minigame_gh', p_amount: reward, p_id: 'crystal' }).then(({data, error}) => {
             if (!error && data && data.success) {
                 state.gh = data.new_gh;
                 g1Inst.innerText = `OVERLOAD! +${reward} GH`; 
@@ -1689,7 +1699,7 @@ function stopSlider() {
     if (g2Pos >= 40 && g2Pos <= 60) {
         haptic('success'); const reward = Math.floor(Math.random() * 5) + 1;
         g2Inst.innerText = `SYNCING...`;
-        supabaseClient.rpc('secure_ad_reward', { p_telegram_id: tgUser.id, p_amount: reward }).then(({data, error}) => {
+        supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'minigame_gh', p_amount: reward, p_id: 'core' }).then(({data, error}) => {
             if (!error && data && data.success) {
                 state.gh = data.new_gh;
                 g2Inst.innerText = `PERFECT! +${reward} GH`; 
@@ -2251,7 +2261,7 @@ function watchAdForTaps() {
 
 async function grantTaps() {
     try {
-        const { data, error } = await supabaseClient.rpc('secure_ad_reward_taps', { p_telegram_id: tgUser.id, p_amount: 100 });
+        const { data, error } = await supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'ad_taps', p_amount: 100, p_id: '' });
         if (error) throw error;
         if (data && data.success) {
             state.bossTaps = data.new_taps;
