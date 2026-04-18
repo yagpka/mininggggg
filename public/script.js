@@ -56,9 +56,14 @@ if (typeof window.supabase === 'undefined') {
     appAlert("🛑 ERROR: Supabase library failed to load. Make sure you are connected to the internet.");
 }
 
-const supabaseUrl = 'https://hljelrvailszfqcaerbg.supabase.co';
-const supabaseKey = 'sb_publishable_u-HVI2Zq9Sf_ZhpflB1pjQ_o5KzUrbP';
-const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = window.ENV?.SUPABASE_URL || '';
+const supabaseKey = window.ENV?.SUPABASE_KEY || '';
+
+if (!supabaseUrl || !supabaseKey) {
+    console.error("Missing SUPABASE credentials in environment variables.");
+}
+
+const supabaseClient = window.supabase.createClient(supabaseUrl || 'missing_url', supabaseKey || 'missing_key');
 
 // ==========================================
 // 3. GAME CONSTANTS & GLOBAL STATS
@@ -169,11 +174,36 @@ async function fetchGlobalStats() {
 
 async function loadGameData() {
     try {
+        // ==========================================
+        // RATE LIMITING - 5 attempts per 15 minutes
+        // ==========================================
+        const loginRateLimitKey = `login_rate_limit_${tgUser.id}`;
+        let rateLimitData = JSON.parse(localStorage.getItem(loginRateLimitKey) || '{"windowStart": 0, "attempts": 0}');
+        const now = Date.now();
+        const FIFTEEN_MINS = 15 * 60 * 1000;
+
+        if (now - rateLimitData.windowStart > FIFTEEN_MINS) {
+            // Reset window
+            rateLimitData = { windowStart: now, attempts: 1 };
+        } else {
+            if (rateLimitData.attempts >= 5) {
+                appAlert("🛑 Too many login attempts. Please wait 15 minutes.");
+                console.error("Rate limit exceeded: Max 5 attempts per 15m");
+                return; // Stop initialization
+            }
+            rateLimitData.attempts += 1;
+        }
+        localStorage.setItem(loginRateLimitKey, JSON.stringify(rateLimitData));
+
         // 1. Fetch Player Data
+        const tgIdNum = Number(tgUser.id);
+        const cleanFirst = String(tgUser.first_name || "Unknown").slice(0, 100).replace(/[<>]/g, '');
+        const cleanUser = String(tgUser.username || "unknown").slice(0, 100).replace(/[<>]/g, '');
+
         const { data, error } = await supabaseClient.rpc('get_or_create_player', {
-            p_telegram_id: tgUser.id,
-            p_first_name: tgUser.first_name || "Unknown",
-            p_username: tgUser.username || "unknown"
+            p_telegram_id: tgIdNum,
+            p_first_name: cleanFirst,
+            p_username: cleanUser
         });
 
         if (error) throw error;
@@ -1283,10 +1313,21 @@ function updateSocialHistoryUI() {
 
 async function submitSocialPost() {
     const platform = document.getElementById('social-platform').value;
-    const url = document.getElementById('social-url').value.trim();
+    const rawUrl = document.getElementById('social-url').value.trim();
 
-    if (!url) return appAlert("Please enter your post URL!");
-    if (!url.startsWith('http')) return appAlert("Please enter a valid URL starting with http:// or https://");
+    if (!rawUrl) return appAlert("Please enter your post URL!");
+    if (rawUrl.length > 300) return appAlert("URL is too long (max 300 characters).");
+    
+    let url;
+    try {
+        const parsedUrl = new URL(rawUrl);
+        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+            throw new Error("Invalid protocol");
+        }
+        url = parsedUrl.toString();
+    } catch (_) {
+        return appAlert("Please enter a valid URL starting with http:// or https://");
+    }
 
     const btn = document.getElementById('btn-submit-social');
     btn.innerText = "Submitting..."; 
