@@ -1,16 +1,32 @@
 // ==========================================
-// 1. SAFTEY CHECK & TELEGRAM OPTIMIZATION
+// 1. SAFETY CHECK & STRICT TELEGRAM VERIFICATION
 // ==========================================
-// Prevents the app from crashing if opened outside of Telegram
+// We do not allow random browser access anymore! Only Telegram or verified testers.
+const urlParams = new URLSearchParams(window.location.search);
+const isTester = urlParams.get('tester') === '777'; // Only you know this key!
+
 if (typeof window.Telegram === 'undefined' || !window.Telegram.WebApp || !window.Telegram.WebApp.initData) {
-    window.Telegram = window.Telegram || {};
-    window.Telegram.WebApp = {
-        initDataUnsafe: { user: { id: 12345678, first_name: "LocalTester", username: "localtester" } },
-        expand: function(){},
-        ready: function(){},
-        showAlert: function(msg){ window.alert(msg); },
-        HapticFeedback: { impactOccurred: function(){} }
-    };
+    if (isTester) {
+        window.Telegram = window.Telegram || {};
+        window.Telegram.WebApp = {
+            initDataUnsafe: { user: { id: 12345678, first_name: "LocalTester", username: "localtester" } },
+            expand: function(){},
+            ready: function(){},
+            showAlert: function(msg){ window.alert(msg); },
+            HapticFeedback: { impactOccurred: function(){} }
+        };
+        console.log("TESTER MODE ACTIVATED.");
+    } else {
+        // LOCK THE APP OUT COMPLETELY FOR RANDOM WEB USERS
+        document.body.innerHTML = `
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#121418; color:white; font-family:sans-serif; text-align:center; padding: 20px;">
+                <h1 style="color:#ffcc00; font-size:40px; margin-bottom:10px;">⚠️</h1>
+                <h2>Play inside Telegram!</h2>
+                <p style="color:#a1a1aa; max-width: 300px;">This game is exclusively available as a Telegram Mini App. Please open it via the official bot.</p>
+            </div>
+        `;
+        throw new Error("Game locked. Opened outside of Telegram.");
+    }
 }
 
 const tg = window.Telegram.WebApp;
@@ -27,7 +43,12 @@ try {
     console.log("TG API advanced features not available"); 
 }
 
-const tgUser = tg.initDataUnsafe?.user || { id: 12345678, first_name: "WebTester", username: "webtester" };
+const tgUser = tg.initDataUnsafe?.user;
+
+if (!tgUser) {
+    document.body.innerHTML = "<h2 style='color:white; text-align:center; padding-top: 50px;'>Error: Telegram User Data Missing.</h2>";
+    throw new Error("No Telegram User Found");
+}
 
 // Safe Haptic Feedback
 function haptic(type = 'light') {
@@ -622,7 +643,9 @@ function claimCoins() {
             appAlert("Coins successfully added to your wallet securely!");
         } else {
             console.error("RPC failed securely:", error);
-            appAlert("Error claiming coins. Try again.");
+            appAlert(data && data.error ? data.error : "Error claiming coins.");
+            // Revert visually if failed
+            state.pendingCoins += claimAmount;
         }
     });
 }
@@ -864,18 +887,19 @@ async function claimTaskReward(taskId, type) {
             if (data && data.success) {
                 state.gh = data.new_gh;
             } else {
-                throw new Error("RPC failed securely.");
+                throw new Error(data && data.error ? data.error : "RPC failed securely.");
             }
         } else if (task.reward.type === 'coins') {
             const { data, error } = await supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'task_coins', p_amount: task.reward.amount, p_id: task.id });
             if (!error && data && data.success) {
                 state.walletCoins = data.new_coins;
             } else {
-                throw new Error("RPC failed securely.");
+                throw new Error(data && data.error ? data.error : "RPC failed securely.");
             }
         }
     } catch (err) {
         console.error("Reward RPC failed. Reward not granted:", err);
+        appAlert(err.message);
         return; // Stop if failed securely
     }
 
@@ -922,13 +946,15 @@ function completeTask(taskId, rewardType, rewardAmt, element) {
                 state.completedTasks.push(taskId);
                 appAlert(`Task Verified Securely!`);
             } else {
-                throw new Error(error ? error.message : "RPC failed");
+                throw new Error(data && data.error ? data.error : (error ? error.message : "RPC failed securely."));
             }
         } catch (err) {
             console.error("Task RPC failed securely:", err);
-            appAlert(`Error verifying task. Try again later.`);
+            appAlert(`Error verifying task: ${err.message}`);
             // DO NOT fallback to client-side. The backend MUST handle this.
-            btn.innerText = "Check";
+            element.innerText = "Check";
+            element.className = "btn btn-action task-btn";
+            element.disabled = false;
             return;
         }
         
@@ -1103,6 +1129,7 @@ function grantBoxReward() {
                 updateUI();
             } else {
                 console.error("Failed to secure box reward:", error);
+                appAlert(data && data.error ? data.error : "Failed to secure box reward.");
             }
         });
     }
@@ -1275,20 +1302,21 @@ async function claimAchievement(achId) {
             if (data && data.success) {
                 state.gh = data.new_gh;
             } else {
-                throw new Error("RPC failed securely.");
+                throw new Error(data && data.error ? data.error : "RPC failed securely.");
             }
         } else if (ach.reward.type === 'tokens') {
             const { data, error } = await supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'achievement_coins', p_amount: ach.reward.amount, p_id: ach.id });
             if (!error && data && data.success) {
                 state.walletCoins = data.new_coins;
             } else {
-                throw new Error("RPC failed securely.");
+                throw new Error(data && data.error ? data.error : "RPC failed securely.");
             }
         } else if (ach.reward.type === 'mult') {
             state.permanentMultiplier += ach.reward.amount;
         }
     } catch (err) {
         console.error("Achievement RPC failed securely:", err);
+        appAlert(err.message);
         return; // Stop if failed securely to prevent hack
     }
 
@@ -1543,7 +1571,7 @@ function grantReward(type) {
                     appAlert("+10 GH Power unlocked securely!");
                 } else {
                     console.error("RPC failed securely:", error);
-                    appAlert("Error claiming reward. Try again.");
+                    appAlert(data && data.error ? data.error : "Error claiming reward.");
                     return;
                 }
                 updateTaskProgress('adPowerGained', 10);
@@ -1562,7 +1590,7 @@ function grantReward(type) {
                 updateUI();
             } else {
                 console.error("RPC failed securely:", error);
-                appAlert("Error claiming lives. Try again.");
+                appAlert(data && data.error ? data.error : "Error claiming lives.");
             }
         });
     }
@@ -1655,7 +1683,7 @@ function endGame1(won) {
                 fetchGlobalStats(); 
                 forceSaveToDB(); 
             } else {
-                g1Inst.innerText = "Error syncing reward.";
+                g1Inst.innerText = data && data.error ? data.error : "Error syncing reward.";
             }
         });
     } else {
@@ -1707,7 +1735,7 @@ function stopSlider() {
                 fetchGlobalStats(); 
                 forceSaveToDB(); 
             } else {
-                g2Inst.innerText = "Error syncing reward.";
+                g2Inst.innerText = data && data.error ? data.error : "Error syncing reward.";
             }
         });
     } else {
@@ -2163,84 +2191,41 @@ async function syncBossData() {
     state.pendingBossTaps = 0;
 
     try {
-        // 1. Update Boss HP
-        const newHp = Math.max(0, currentBoss.current_hp - damageToSync);
-        const { error: hpError } = await supabaseClient
-            .from('boss_events')
-            .update({ 
-                current_hp: newHp,
-                status: newHp <= 0 ? 'defeated' : 'active',
-                defeated_at: newHp <= 0 ? new Date().toISOString() : null
-            })
-            .eq('id', currentBoss.id);
+        const { data, error } = await supabaseClient.rpc('secure_sync_boss_damage', {
+            p_telegram_id: tgUser.id,
+            p_boss_id: currentBoss.id,
+            p_damage: damageToSync,
+            p_taps_used: tapsToSync
+        });
 
-        if (hpError) throw hpError;
-
-        // 2. Update Contribution
-        const { data: existingContrib } = await supabaseClient
-            .from('boss_contributions')
-            .select('id, damage_dealt')
-            .eq('boss_id', currentBoss.id)
-            .eq('player_id', tgUser.id)
-            .maybeSingle();
-
-        if (existingContrib) {
-            await supabaseClient
-                .from('boss_contributions')
-                .update({ damage_dealt: Number(existingContrib.damage_dealt) + damageToSync })
-                .eq('id', existingContrib.id);
-        } else {
-            await supabaseClient
-                .from('boss_contributions')
-                .insert({ boss_id: currentBoss.id, player_id: tgUser.id, damage_dealt: damageToSync });
+        if (error) throw error;
+        
+        if (data && !data.success) {
+            console.error("Boss Sync rejected by server:", data.error);
+            // Ensure visual state catches up if server rejected it
+            fetchBossData();
+            return;
         }
 
-        // 3. Update Player Taps
-        state.bossTaps -= tapsToSync;
-        await supabaseClient.from('players').update({ boss_taps: state.bossTaps }).eq('telegram_id', tgUser.id);
-
-        if (newHp <= 0) {
-            appAlert("VICTORY! The boss has been defeated!");
-            await distributeBossRewards(currentBoss);
-            fetchBossData();
+        // Successfully synced
+        if (data && data.boss_died) {
+            appAlert("VICTORY! The boss has been defeated! The network is distributing rewards.");
+            fetchBossData(); // Refreshes boss state and UI
         }
     } catch (err) {
-        console.error("Sync error:", err);
+        console.error("Secure boss sync error:", err);
+        // Error could mean network issue, but we already wiped pending. This prevents
+        // hacker loops from queuing up 20000 damage while "offline"
     }
 }
 
 async function distributeBossRewards(boss) {
-    try {
-        // Get all contributions for this boss
-        const { data: contribs } = await supabaseClient
-            .from('boss_contributions')
-            .select('player_id, damage_dealt')
-            .eq('boss_id', boss.id);
-        
-        if (!contribs) return;
-
-        for (const c of contribs) {
-            const share = Number(c.damage_dealt) / boss.max_hp;
-            const reward = Math.floor(boss.reward_tokens * share);
-            
-            if (reward > 0) {
-                const { data: pData } = await supabaseClient
-                    .from('players')
-                    .select('wallet_coins')
-                    .eq('telegram_id', c.player_id)
-                    .maybeSingle();
-                
-                if (pData) {
-                    await supabaseClient
-                        .from('players')
-                        .update({ wallet_coins: Number(pData.wallet_coins) + reward })
-                        .eq('telegram_id', c.player_id);
-                }
-            }
-        }
-    } catch (err) {
-        console.error("Reward distribution error:", err);
-    }
+    // SECURITY UPDATE:
+    // This function originally manually updated other players' coins from the client side!
+    // That is incredibly dangerous. We have migrated this entirely to the Database Trigger.
+    // When the boss dies in the `secure_sync_boss_damage` RPC, the backend securely computes
+    // and distributes the rewards independently of the client.
+    console.log("Boss rewards are now securely handled by the Database Trigger!");
 }
 
 function watchAdForTaps() {
@@ -2268,11 +2253,11 @@ async function grantTaps() {
             updateBossUI();
             appAlert("Success! +100 Taps granted securely. ⚔️");
         } else {
-            throw new Error("RPC failed securely.");
+            throw new Error(data && data.error ? data.error : "RPC failed securely.");
         }
     } catch (err) {
         console.error("Failed to grant taps securely:", err);
-        appAlert("Error syncing taps. Please try again.");
+        appAlert(`Error syncing taps: ${err.message}`);
     }
 }
 
