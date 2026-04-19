@@ -1876,10 +1876,9 @@ async function processReferral(referrerId) {
 
         if (success) {
             // Reward current user locally (server already updated DB)
-            // 48-HOUR EVENT: DOUBLED
-            state.gh += 200;
-            state.walletCoins += 200;
-            appAlert("🎉 100 Users Event! You were referred and received DOUBLE rewards: +200 GH/s and +200 Coins!");
+            state.gh += 100;
+            state.walletCoins += 100;
+            appAlert("🎉 You were referred! +100 GH/s and +100 Coins!");
             forceSaveToDB();
         } else {
             console.log("User already referred or invalid.");
@@ -1889,6 +1888,35 @@ async function processReferral(referrerId) {
         console.error("Referral processing error:", err);
     }
 }
+
+// ==========================================
+// 48 HOUR EVENT COUNTDOWN
+// ==========================================
+// Ends 48 hours relative to April 19, 2026 02:40 PM PST -> April 21, 2026 09:40:54 UTC
+const EVENT_END_TIME = new Date("2026-04-21T09:40:54Z").getTime();
+
+function updateEventCountdown() {
+    const el = document.getElementById('event-countdown');
+    if (!el) return;
+
+    const now = Date.now();
+    const diff = EVENT_END_TIME - now;
+
+    if (diff <= 0) {
+        el.innerText = "00:00:00";
+        el.style.color = "var(--text-muted)";
+        return;
+    }
+
+    const h = Math.floor(diff / (1000 * 60 * 60));
+    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const s = Math.floor((diff % (1000 * 60)) / 1000);
+
+    el.innerText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+setInterval(updateEventCountdown, 1000);
+updateEventCountdown();
 
 async function loadReferralHistory() {
     try {
