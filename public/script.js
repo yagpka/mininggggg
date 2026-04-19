@@ -201,6 +201,31 @@ async function fetchGlobalStats() {
     } catch (err) {
         console.error("Failed to fetch global stats:", err);
     }
+
+    try {
+        const { data: configData, error: configErr } = await supabaseClient
+            .from('app_config')
+            .select('config_value')
+            .eq('config_id', 'global_announcement')
+            .maybeSingle();
+            
+        if (!configErr && configData && configData.config_value) {
+            const strip = document.getElementById('global-announcement');
+            const textEl = document.getElementById('announcement-text');
+            if (strip && textEl) {
+                strip.style.display = 'block';
+                // Only update text to avoid resetting CSS animation unnecessarily
+                if (textEl.innerText !== configData.config_value) {
+                    textEl.innerText = configData.config_value;
+                }
+            }
+        } else {
+            const strip = document.getElementById('global-announcement');
+            if (strip) strip.style.display = 'none';
+        }
+    } catch (err) {
+        // Ignore silent failure for app config
+    }
 }
 
 async function loadGameData() {
@@ -2189,6 +2214,10 @@ async function syncBossData() {
     // Reset pending immediately to avoid double-counting
     state.pendingBossDamage = 0;
     state.pendingBossTaps = 0;
+    
+    // Deduct taps locally right away for instantly accurate UI
+    state.bossTaps -= tapsToSync;
+    updateBossUI();
 
     try {
         const { data, error } = await supabaseClient.rpc('secure_sync_boss_damage', {
@@ -2202,7 +2231,9 @@ async function syncBossData() {
         
         if (data && !data.success) {
             console.error("Boss Sync rejected by server:", data.error);
-            // Ensure visual state catches up if server rejected it
+            // Revert state if server rejects
+            state.bossTaps += tapsToSync;
+            updateBossUI();
             fetchBossData();
             return;
         }
