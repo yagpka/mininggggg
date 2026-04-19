@@ -398,7 +398,7 @@ function enterGame() {
     haptic('heavy');
     const loader = document.getElementById('loading-screen');
     if(loader) loader.classList.add('hidden');
-    showJackpotModal(); // Shows the new jackpot announcement
+    showEventModal(); // Shows the 100 Users Event announcement
 }
 
 let saveTimeout;
@@ -1066,14 +1066,14 @@ async function claimEventBoost() {
 // 10.5 VIRAL SOCIAL MINING LOGIC
 // ==========================================
 
-function showJackpotModal() {
-    const modal = document.getElementById('jackpot-modal');
+function showEventModal() {
+    const modal = document.getElementById('event-modal');
     if (modal) modal.classList.remove('hidden');
 }
 
-function closeJackpotModal() {
+function closeEventModal() {
     haptic('light');
-    const modal = document.getElementById('jackpot-modal');
+    const modal = document.getElementById('event-modal');
     if (modal) modal.classList.add('hidden');
 }
 

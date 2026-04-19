@@ -859,21 +859,21 @@
         </div>
 
         <!-- NEW: Boss Raid & Level System Popup -->
-        <!-- JACKPOT ANNOUNCEMENT MODAL -->
-        <div id="jackpot-modal" class="modal hidden">
-            <div class="modal-card" style="border: 2px solid var(--accent-yellow);">
-                <div style="font-size: 60px; filter: drop-shadow(4px 4px 0px #111);">🎟️</div>
-                <h2 style="color: var(--accent-yellow); margin-bottom: 5px; font-weight: 900;">Daily SOL Jackpot!</h2>
+        <!-- 100 USERS EVENT MODAL -->
+        <div id="event-modal" class="modal hidden">
+            <div class="modal-card" style="border: 2px solid var(--accent-purple);">
+                <div style="font-size: 60px; filter: drop-shadow(4px 4px 0px #111);">🎉</div>
+                <h2 style="color: var(--accent-purple); margin-bottom: 5px; font-weight: 900;">100 Users Event!</h2>
                 
                 <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px;">
-                    A new way to win has arrived! 🚀<br><br>
-                    💰 <b>0.002 SOL Daily:</b> One lucky active miner will win the jackpot every single day!<br><br>
-                    🟢 <b>Stay Active:</b> Complete 2 daily tasks to get your <b>Active</b> status and automatically receive 1 entry ticket.<br><br>
-                    Check the <b>Raffle Jackpot</b> section in the Tasks tab to see your eligibility and previous winners!
+                    We just crossed 100 active miners! 🚀<br><br>
+                    ⚡ <b>24-Hour Boost:</b> For a limited time, all Active Players can claim a massive <b>2x Mining Multiplier</b>!<br><br>
+                    🟢 <b>How limits work:</b> Complete 2 daily tasks to get your <b>Active</b> status, then head over to the new <b>48H Event</b> tab to claim!<br><br>
+                    Thank you for making Miner Switch epic!
                 </p>
                 
-                <button class="btn btn-action" style="background: var(--accent-yellow); color: #111;" onclick="closeJackpotModal()">
-                    Awesome! Let's Mine ⛏️
+                <button class="btn btn-action" style="background: var(--accent-purple); color: #fff;" onclick="closeEventModal(); switchTab('tasks'); switchSubTab('event-view');">
+                    Go Claim Boost ⚡
                 </button>
             </div>
         </div>

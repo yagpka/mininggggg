@@ -649,7 +649,8 @@ body {
 
 /* TASKS, SOCIAL & SHOP TAB */
 .sub-nav { 
-    display: flex; 
+    display: grid; 
+    grid-template-columns: 1fr 1fr;
     gap: 6px; 
     background: var(--bg-light); 
     padding: 6px; 
@@ -657,7 +658,6 @@ body {
     border: 2px solid var(--card-border);
 }
 .sub-nav-btn { 
-    flex: 1; 
     padding: 10px 4px; 
     border-radius: 10px; 
     background: transparent; 
