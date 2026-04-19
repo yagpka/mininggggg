@@ -225,7 +225,7 @@
                 <div class="sub-nav mb-20">
                     <button class="sub-nav-btn active" onclick="switchSubTab('tasks-view')">Tasks & Streak</button>
                     <button class="sub-nav-btn" onclick="switchSubTab('social-view')" style="color: var(--accent-purple);">Viral Social 🚀</button>
-                    <button class="sub-nav-btn" onclick="switchSubTab('raffle-view')" style="color: var(--accent-yellow);">Raffle Jackpot 🎟️</button>
+                    <button class="sub-nav-btn" onclick="switchSubTab('event-view')" style="color: var(--accent-yellow);">100 Users Event 🎉</button>
                 </div>
 
                 <!-- TASKS VIEW -->
@@ -332,33 +332,21 @@
                     </div>
                 </div>
 
-                <!-- RAFFLE JACKPOT VIEW -->
-                <div id="raffle-view" class="sub-tab-content">
+                <!-- 100 USERS EVENT VIEW -->
+                <div id="event-view" class="sub-tab-content">
                     <div class="feature-card" style="padding: 20px; border-color: var(--accent-yellow);">
-                        <h2 style="font-size: 20px;">🎟️ Daily <span class="highlight-yellow">SOL Jackpot</span></h2>
-                        <p class="subtitle mt-10">Every day, one lucky active miner wins <b>0.002 SOL</b>!</p>
+                        <h2 style="font-size: 20px;">🎉 MINER SWITCH <span class="highlight-yellow">100 USERS EVENT!</span></h2>
+                        <p class="subtitle mt-10">We hit 100 active miners! To celebrate, a special 48-Hour event is live for all players.</p>
 
-                        <div class="ability-section mt-10" style="background: var(--card-bg); padding: 15px; border-radius: 12px; border: 2px solid var(--card-border); box-shadow: var(--shadow-sm);">
-                            <h3 style="color: var(--accent-yellow); margin-bottom: 8px;">📜 THE RULES</h3>
-                            <ul style="font-size: 12px; margin-left: 20px; line-height: 1.6;">
-                                <li>You must be <b>Active 🟢</b> (complete 2 daily tasks).</li>
-                                <li>You must have submitted your <b>SOL Address</b> in the Profile tab.</li>
-                                <li>Active players automatically receive <b>1 Ticket</b> daily.</li>
-                            </ul>
+                        <div class="ability-section mt-10" style="background: var(--card-bg); padding: 15px; border-radius: 12px; border: 2px solid var(--accent-purple); box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);">
+                            <h3 style="color: var(--accent-purple); margin-bottom: 8px;">🔥 Active Player Reward</h3>
+                            <p style="font-size: 13px; color: #a1a1aa; margin-bottom: 12px;">Active players get a free <b>2x Mining Speed Boost</b> for 24 Hours!</p>
+                            <button id="btn-claim-event-boost" class="btn btn-action" style="width: 100%; border: 1px solid var(--accent-purple);" onclick="claimEventBoost()">CLAIM 24H BOOST ⚡</button>
                         </div>
 
-                        <div class="mt-20" style="text-align: center; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 12px;">
-                            <h3 style="font-size: 14px; margin-bottom: 10px;">Your Status</h3>
-                            <div id="raffle-eligibility">
-                                <!-- JS will populate this -->
-                                <span style="color: var(--text-muted); font-size: 12px;">Checking eligibility...</span>
-                            </div>
-                        </div>
-
-                        <h3 style="font-size: 14px; margin-top: 30px; border-top: 2px dashed var(--card-border); padding-top: 20px;">🏆 Previous Winners</h3>
-                        <div id="raffle-winners-list" class="history-list mt-10">
-                            <!-- JS will populate this -->
-                            <p style="text-align:center; color:var(--text-muted); font-size:12px;">Loading winners...</p>
+                        <div class="ability-section mt-10" style="background: var(--card-bg); padding: 15px; border-radius: 12px; border: 2px solid var(--accent-green); box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);">
+                            <h3 style="color: var(--accent-green); margin-bottom: 8px;">🚀 Referral Rush</h3>
+                            <p style="font-size: 13px; color: #a1a1aa;">For the next 48 hours, ALL rewards from referring friends are <b>DOUBLED</b>. Both you and your friend get 2x Power and Coins! Share your link now!</p>
                         </div>
                     </div>
                 </div>

@@ -216,7 +216,12 @@ async function fetchGlobalStats() {
                 strip.style.display = 'block';
                 // Only update text to avoid resetting CSS animation unnecessarily
                 if (textEl.innerText !== configData.config_value) {
-                    textEl.innerText = configData.config_value;
+                    textEl.style.transition = "opacity 0.5s ease-in-out";
+                    textEl.style.opacity = 0;
+                    setTimeout(() => {
+                        textEl.innerText = configData.config_value;
+                        textEl.style.opacity = 1;
+                    }, 500);
                 }
             }
         } else {
@@ -988,6 +993,73 @@ function completeTask(taskId, rewardType, rewardAmt, element) {
         forceSaveToDB(); 
         updateUI();
     }, 1500); 
+}
+
+// --------------------------------
+// 100 USERS EVENT BOOST LOGIC
+// --------------------------------
+async function claimEventBoost() {
+    if (isRateLimited('claimEventBoost', 3000)) return;
+
+    if (!isPlayerActiveData(state.dailyTasksProgress)) {
+        appAlert("You must be an Active Player to claim this boost! (Check Profile Tab for requirements)");
+        return;
+    }
+
+    const btn = document.getElementById('btn-claim-event-boost');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = "Claiming...";
+    }
+
+    try {
+        const { data, error } = await supabaseClient.rpc('secure_grant_reward', {
+            p_telegram_id: tgUser.id,
+            p_type: 'event_100_users',
+            p_amount: 0,
+            p_id: 'event_100_users' // The script uses p_id to check LEDGER for uniqueness
+        });
+
+        if (error || (data && !data.success)) {
+            let limitMsg = (data && data.error) ? data.error : "Failed to claim.";
+            appAlert(limitMsg);
+            if (btn) {
+                btn.innerText = "Already Claimed / Error";
+            }
+            return;
+        }
+
+        // Successfully claimed
+        haptic('heavy');
+        appAlert("🎉 Successfully Claimed 24-Hour 2x Boost!");
+        
+        // Apply 2x active multiplier for 24h
+        if (!state.activeMultipliers) state.activeMultipliers = [];
+        state.activeMultipliers.push({
+            factor: 2.0,
+            endTime: Date.now() + (24 * 60 * 60 * 1000), // 24 hours
+            label: "100 Users Event!"
+        });
+        
+        if (btn) {
+            btn.innerText = "Claimed! ⚡";
+            btn.classList.remove('btn-action');
+            btn.style.background = "var(--card-bg)";
+            btn.style.color = "var(--text-muted)";
+            btn.style.borderColor = "var(--card-border)";
+        }
+        
+        forceSaveToDB();
+        updateUI();
+
+    } catch (err) {
+        console.error("Event claim error:", err);
+        appAlert("Network error claiming boost.");
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "CLAIM 24H BOOST ⚡";
+        }
+    }
 }
 
 // ==========================================
@@ -1804,9 +1876,10 @@ async function processReferral(referrerId) {
 
         if (success) {
             // Reward current user locally (server already updated DB)
-            state.gh += 100;
-            state.walletCoins += 100;
-            appAlert("🎉 You were referred! +100 GH/s and +100 Coins!");
+            // 48-HOUR EVENT: DOUBLED
+            state.gh += 200;
+            state.walletCoins += 200;
+            appAlert("🎉 100 Users Event! You were referred and received DOUBLE rewards: +200 GH/s and +200 Coins!");
             forceSaveToDB();
         } else {
             console.log("User already referred or invalid.");
