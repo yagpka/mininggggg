@@ -140,7 +140,7 @@ function isRateLimited(action, msLimit) {
 }
 
 let state = {
-    gh: 0, pendingCoins: 0, walletCoins: 0, totalMinedFromPool: 0, totalLifetimeTokens: 0,
+    gh: 0, pendingCoins: 0, walletCoins: 0, totalMinedFromPool: 0, totalClaimedTokens: 0,
     lives: 0, solAddress: "", lastCalcTime: Date.now(), heatMs: 0,               
     streakDays: 1, lastLoginDate: "", completedTasks: [],
     socialHistory: [], // Added to store their submission history    
@@ -572,7 +572,7 @@ function updateUI() {
     els.walletMain.innerText = formattedWallet;
     // Assume there is an element for total lifetime tokens
     const totalTokensEl = document.getElementById('total-tokens-display');
-    if (totalTokensEl) totalTokensEl.innerText = state.totalLifetimeTokens.toFixed(2);
+    if (totalTokensEl) totalTokensEl.innerText = state.totalClaimedTokens.toFixed(2);
     els.lives.innerText = state.lives;
     els.solDisplay.innerText = state.solAddress || "None";
 
@@ -671,9 +671,14 @@ async function grantReward(type, amount, id) {
         });
 
         if (!error && data && data.success) {
-            // Generic update for lifetime tokens if it's a coin grant
+            // Generic update for claimed tokens & wallet coins synchronization
             if (type.includes('coins')) {
-                state.totalLifetimeTokens = data.total_lifetime_tokens || (state.totalLifetimeTokens + safeAmount);
+                state.walletCoins = data.new_coins; // Prioritize DB wallet sync
+                state.totalClaimedTokens = data.total_claimed_tokens || (state.totalClaimedTokens + safeAmount);
+                // Based on requirements, keeping mined parallel to wallet updates
+                state.totalMinedFromPool = data.total_mined || state.totalMinedFromPool;
+            } else if (type.includes('gh')) {
+                state.gh = data.new_gh;
             }
             
             forceSaveToDB();
