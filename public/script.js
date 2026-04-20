@@ -662,10 +662,16 @@ function claimCoins() {
     haptic('success');
     
     // Fallback visually, but sync securely
-    const claimAmount = state.pendingCoins;
+    const claimAmount = Math.floor(state.pendingCoins * 10000) / 10000;
     state.pendingCoins = 0;
     
-    supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'pool_coins', p_amount: claimAmount, p_id: '' }).then(({data, error}) => {
+    // Explicitly pass amount as a float/number to ensure backend receives the full value
+    supabaseClient.rpc('secure_grant_reward', { 
+        p_telegram_id: tgUser.id, 
+        p_type: 'pool_coins', 
+        p_amount: parseFloat(claimAmount.toFixed(4)), 
+        p_id: '' 
+    }).then(({data, error}) => {
         if (!error && data && data.success) {
             state.walletCoins = data.new_coins;
             forceSaveToDB(); 
