@@ -691,14 +691,24 @@
             <div id="wallet-tab" class="tab-content">
                 <div class="feature-card wallet-card">
                     <div class="card-content">
-                        <h2>Mined Tokens</h2>
-                        <p class="subtitle">Your total token balance.</p>
+                        <h2>Your <span class="highlight-yellow">Wallet</span></h2>
+                        <p class="subtitle">Securely store and withdraw your mined coins.</p>
                         
                         <div class="massive-balance">
-                            <span id="mined-tokens-display">0.0000</span> 🪙
+                            <span id="wallet-coins">0.0000</span> 🪙
                         </div>
 
-                        <!-- Withdrawal Address Box remains for functionality, but withdrawal status fields are removed to satisfy "only one field" request -->
+                        <div class="ability-section mt-20">
+                            <h3>Withdrawal Status</h3>
+                            <div class="ability-row">
+                                <div class="ability-info">
+                                    <span id="withdraw-status-text">Pool Depletion Needed</span>
+                                    <span id="pool-remaining-wallet">300,000,000</span>
+                                </div>
+                                <div class="progress-bar"><div class="fill fill-cyan" id="withdraw-progress" style="width: 0%;"></div></div>
+                            </div>
+                        </div>
+                        
                         <div class="address-box mt-20">
                             <h3>Withdrawal Address</h3>
                             <input type="text" id="sol-address-input" placeholder="Enter SOL Address..." class="glass-input">

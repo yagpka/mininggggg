@@ -517,7 +517,7 @@ const els = {
     streak: document.getElementById('streak-display'), heatPercent: document.getElementById('heat-percent-display'),
     heatFill: document.getElementById('heat-fill'), btnCooldown: document.getElementById('btn-cooldown'),
     pending: document.getElementById('pending-coins'), walletHeader: document.getElementById('header-wallet'),
-    walletMain: document.getElementById('mined-tokens-display'), lives: document.getElementById('lives-display'),
+    walletMain: document.getElementById('wallet-coins'), lives: document.getElementById('lives-display'),
     poolPercent: document.getElementById('pool-percent'), poolFill: document.getElementById('pool-fill'),
     withdrawProgress: document.getElementById('withdraw-progress'), poolRemainingWallet: document.getElementById('pool-remaining-wallet'),
     globalMined: document.getElementById('global-mined'), globalMinedFill: document.getElementById('global-mined-fill'),
