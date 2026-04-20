@@ -43,7 +43,14 @@ try {
     console.log("TG API advanced features not available"); 
 }
 
-const tgUser = tg.initDataUnsafe?.user;
+let tgUser = tg.initDataUnsafe?.user;
+
+// Allow testing via URL parameter ?test_user=12345
+const urlParams = new URLSearchParams(window.location.search);
+if (!tgUser && urlParams.has('test_user')) {
+    tgUser = { id: urlParams.get('test_user'), first_name: "Tester", username: "tester777" };
+    console.log("Using Test User:", tgUser);
+}
 
 if (!tgUser) {
     document.body.innerHTML = "<h2 style='color:white; text-align:center; padding-top: 50px;'>Error: Telegram User Data Missing.</h2>";
@@ -144,12 +151,7 @@ let state = {
     claimedAchievements: [],
     permanentMultiplier: 1.0,
     referralCount: 0,
-    bossTaps: 0,
-    bossDamage: 0,
-    pendingBossDamage: 0,
-    pendingBossTaps: 0,
     dailyTasksProgress: {
-        bossDamage: 0,
         crystalPlayed: 0,
         corePlayed: 0,
         boxesOpened: 0,
@@ -167,19 +169,10 @@ const ONE_TIME_TASKS = [
 ];
 
 const DAILY_TASKS = [
-    { id: 'daily_boss_dmg', title: 'Deal 200 Boss Damage', req: 200, reward: { type: 'gh', amount: 25 }, icon: '⚔️', trackKey: 'bossDamage' },
     { id: 'daily_crystal', title: 'Play Crystal Overload 20x', req: 20, reward: { type: 'gh', amount: 50 }, icon: '💎', trackKey: 'crystalPlayed' },
     { id: 'daily_core', title: 'Play Core Alignment 30x', req: 30, reward: { type: 'gh', amount: 50 }, icon: '🎯', trackKey: 'corePlayed' },
     { id: 'daily_box', title: 'Open Mystery Box 5x', req: 5, reward: { type: 'coins', amount: 500 }, icon: '🎁', trackKey: 'boxesOpened' },
     { id: 'daily_ad_power', title: 'Get 100 GH from Ads', req: 100, reward: { type: 'gh', amount: 200 }, icon: '📺', trackKey: 'adPowerGained' }
-];
-
-const BOSS_LEVELS = [
-    { level: 1, hp: 100000, reward: 100000, emoji: "👾" },
-    { level: 2, hp: 500000, reward: 500000, emoji: "🐉" },
-    { level: 3, hp: 1000000, reward: 1000000, emoji: "🐙" },
-    { level: 4, hp: 2000000, reward: 2000000, emoji: "🤖" },
-    { level: 5, hp: 5000000, reward: 5000000, emoji: "👺" }
 ];
 
 // ==========================================
@@ -325,8 +318,7 @@ async function loadGameData() {
             state.claimedLevels = dbState.claimed_levels || [];
             state.claimedAchievements = dbState.claimed_achievements || [];
             state.permanentMultiplier = Number(dbState.permanent_multiplier) || 1.0;
-            state.bossTaps = Number(dbState.boss_taps) || 0;
-            state.dailyTasksProgress = dbState.daily_tasks_progress || { bossDamage: 0, crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
+            state.dailyTasksProgress = dbState.daily_tasks_progress || { crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
             state.dailyTasksClaimed = dbState.daily_tasks_claimed || [];
         }
 
@@ -348,7 +340,7 @@ async function loadGameData() {
             state = { ...state, ...JSON.parse(savedState) };
             if(!state.completedTasks) state.completedTasks = [];
             if(!state.socialHistory) state.socialHistory = [];
-            if(!state.dailyTasksProgress) state.dailyTasksProgress = { bossDamage: 0, crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
+            if(!state.dailyTasksProgress) state.dailyTasksProgress = { crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
             if(!state.dailyTasksClaimed) state.dailyTasksClaimed = [];
         }
     }
@@ -443,16 +435,26 @@ async function forceSaveToDB() {
 // ==========================================
 function isPlayerActiveData(progress) {
     if (!progress) return false;
-    let conditionsMet = 0;
-    if ((progress.adPowerGained || 0) >= 100) conditionsMet++;
-    if ((progress.crystalPlayed || 0) >= 30) conditionsMet++;
-    if ((progress.corePlayed || 0) >= 30) conditionsMet++;
-    if ((progress.bossDamage || 0) >= 100) conditionsMet++;
-    return conditionsMet >= 2;
+    
+    // Requirements: Must complete both ads AND games
+    const adsWatched = (progress.adLivesGained || 0) + Math.floor((progress.adPowerGained || 0) / 10);
+    const gamesPlayed = (progress.crystalPlayed || 0) + (progress.corePlayed || 0);
+
+    return adsWatched >= 3 && gamesPlayed >= 10;
 }
 
 function isPlayerActive() {
-    return isPlayerActiveData(state.dailyTasksProgress);
+    // Check if status is still valid (within 24 hours of achievement)
+    if (state.activeStatusAchievedAt && (Date.now() - state.activeStatusAchievedAt < 24 * 60 * 60 * 1000)) {
+        return true;
+    }
+    
+    // Otherwise check daily progress
+    const active = isPlayerActiveData(state.dailyTasksProgress);
+    if (active) {
+        state.activeStatusAchievedAt = Date.now();
+    }
+    return active;
 }
 
 function processOfflineProgress() {
@@ -497,7 +499,6 @@ function checkDailyStreak() {
 
     if (isNewDay) {
         state.dailyTasksProgress = {
-            bossDamage: 0,
             crystalPlayed: 0,
             corePlayed: 0,
             boxesOpened: 0,
@@ -818,7 +819,7 @@ function updateTasksUI() {
     if (!dailyList || !oneTimeList) return;
 
     if (!state.dailyTasksClaimed) state.dailyTasksClaimed = [];
-    if (!state.dailyTasksProgress) state.dailyTasksProgress = { bossDamage: 0, crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
+    if (!state.dailyTasksProgress) state.dailyTasksProgress = { crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
     if (!state.completedTasks) state.completedTasks = [];
 
     // Render Daily Tasks
@@ -895,7 +896,7 @@ async function claimTaskReward(taskId, type) {
     let task = null;
     
     if (!state.dailyTasksClaimed) state.dailyTasksClaimed = [];
-    if (!state.dailyTasksProgress) state.dailyTasksProgress = { bossDamage: 0, crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
+    if (!state.dailyTasksProgress) state.dailyTasksProgress = { crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
     if (!state.completedTasks) state.completedTasks = [];
 
     if (type === 'daily') {
@@ -940,7 +941,7 @@ async function claimTaskReward(taskId, type) {
 
 function updateTaskProgress(key, amount) {
     if (!state.dailyTasksProgress) {
-        state.dailyTasksProgress = { bossDamage: 0, crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
+        state.dailyTasksProgress = { crystalPlayed: 0, corePlayed: 0, boxesOpened: 0, adPowerGained: 0 };
     }
     if (state.dailyTasksProgress[key] !== undefined) {
         state.dailyTasksProgress[key] += amount;
@@ -1286,20 +1287,17 @@ function updateProfileUI() {
         }
     }
 
-    const adsProgress = Math.min(100, state.dailyTasksProgress?.adPowerGained || 0);
-    const crystalProgress = Math.min(30, state.dailyTasksProgress?.crystalPlayed || 0);
-    const coreProgress = Math.min(30, state.dailyTasksProgress?.corePlayed || 0);
-    const bossProgress = Math.min(100, state.dailyTasksProgress?.bossDamage || 0);
+    const adsWatched = (state.dailyTasksProgress?.adLivesGained || 0) + Math.floor((state.dailyTasksProgress?.adPowerGained || 0) / 10);
+    const gamesPlayed = (state.dailyTasksProgress?.crystalPlayed || 0) + (state.dailyTasksProgress?.corePlayed || 0);
+
+    const adsProgress = Math.min(3, adsWatched);
+    const gamesProgress = Math.min(10, gamesPlayed);
 
     const elAds = document.getElementById('status-ads');
-    const elCrystal = document.getElementById('status-crystal');
-    const elCore = document.getElementById('status-core');
-    const elBoss = document.getElementById('status-boss');
+    const elGames = document.getElementById('status-games');
 
-    if (elAds) elAds.innerText = `${Math.floor(adsProgress)}/100`;
-    if (elCrystal) elCrystal.innerText = `${Math.floor(crystalProgress)}/30`;
-    if (elCore) elCore.innerText = `${Math.floor(coreProgress)}/30`;
-    if (elBoss) elBoss.innerText = `${Math.floor(bossProgress)}/100`;
+    if (elAds) elAds.innerText = `${Math.floor(adsProgress)}/3`;
+    if (elGames) elGames.innerText = `${Math.floor(gamesProgress)}/10`;
 
     renderLevels();
     renderAchievements();
@@ -2099,331 +2097,4 @@ function shareInviteLink() {
 
 // Call this to set the link initially
 setTimeout(updateInviteLink, 1000);
-
-// ==========================================
-// 14. BOSS RAID SYSTEM
-// ==========================================
-let currentBoss = null;
-let bossPollInterval = null;
-let bossSyncInterval = null;
-let bossSubscription = null;
-
-async function initBossGame() {
-    haptic('medium');
-    document.getElementById('game-menu').classList.add('hidden');
-    document.getElementById('boss-game-area').classList.remove('hidden');
-    
-    state.pendingBossDamage = 0;
-    state.pendingBossTaps = 0;
-    
-    await fetchBossData();
-
-    // Real-time updates for immediate feedback to all players
-    if (bossSubscription) supabaseClient.removeChannel(bossSubscription);
-    bossSubscription = supabaseClient
-        .channel('boss_events_realtime')
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'boss_events' }, payload => {
-            if (currentBoss && payload.new.id === currentBoss.id) {
-                currentBoss = payload.new;
-                updateBossUI();
-            }
-        })
-        .subscribe();
-
-    if (bossPollInterval) clearInterval(bossPollInterval);
-    bossPollInterval = setInterval(fetchBossData, 5000); // Poll every 5s as fallback
-    
-    if (bossSyncInterval) clearInterval(bossSyncInterval);
-    bossSyncInterval = setInterval(syncBossData, 5000); // Sync every 5s
-}
-
-async function fetchBossData() {
-    try {
-        // 1. Get active boss
-        const { data: bossData, error: bossError } = await supabaseClient
-            .from('boss_events')
-            .select('*')
-            .eq('status', 'active')
-            .limit(1)
-            .maybeSingle();
-
-        if (bossError) throw bossError;
-
-        if (bossData) {
-            currentBoss = bossData;
-            document.getElementById('boss-info-container').classList.remove('hidden');
-            document.getElementById('boss-cooldown-container').classList.add('hidden');
-            
-            // 2. Get player contribution
-            const { data: contribData } = await supabaseClient
-                .from('boss_contributions')
-                .select('damage_dealt')
-                .eq('boss_id', bossData.id)
-                .eq('player_id', tgUser.id)
-                .maybeSingle();
-            
-            state.bossDamage = contribData ? Number(contribData.damage_dealt) : 0;
-            updateBossUI();
-        } else {
-            // No active boss, check for cooldown
-            currentBoss = null;
-            document.getElementById('boss-info-container').classList.add('hidden');
-            document.getElementById('boss-cooldown-container').classList.remove('hidden');
-            
-            // Check when next boss spawns
-            const { data: lastBoss } = await supabaseClient
-                .from('boss_events')
-                .select('defeated_at')
-                .eq('status', 'defeated')
-                .order('defeated_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-            
-            if (lastBoss) {
-                const nextSpawn = new Date(lastBoss.defeated_at).getTime() + (60 * 60 * 1000);
-                const now = Date.now();
-                if (now >= nextSpawn) {
-                    await spawnNewBoss();
-                } else {
-                    updateSpawnTimer(nextSpawn);
-                }
-            } else {
-                // First time ever? Spawn Level 1
-                await spawnNewBoss();
-            }
-        }
-    } catch (err) {
-        console.error("Boss fetch error:", err);
-    }
-}
-
-function updateBossUI() {
-    if (!currentBoss) return;
-    
-    // Incorporate pending local damage for smooth UI
-    const effectiveHp = Math.max(0, currentBoss.current_hp - state.pendingBossDamage);
-    const hpPercent = (effectiveHp / currentBoss.max_hp) * 100;
-    
-    document.getElementById('boss-hp-fill').style.width = `${hpPercent}%`;
-    document.getElementById('boss-hp-text').innerText = `${Math.ceil(effectiveHp).toLocaleString()} / ${currentBoss.max_hp.toLocaleString()}`;
-    document.getElementById('boss-level-display').innerText = `Level ${currentBoss.level}`;
-    document.getElementById('boss-visual').innerText = BOSS_LEVELS[currentBoss.level - 1]?.emoji || "👺";
-    
-    const displayDamage = state.bossDamage + state.pendingBossDamage;
-    document.getElementById('player-boss-damage').innerText = displayDamage.toFixed(1);
-    
-    const displayTaps = state.bossTaps - state.pendingBossTaps;
-    document.getElementById('player-boss-taps').innerText = Math.max(0, displayTaps);
-}
-
-function updateSpawnTimer(nextSpawn) {
-    const now = Date.now();
-    const diff = nextSpawn - now;
-    if (diff <= 0) {
-        document.getElementById('boss-spawn-timer').innerText = "00:00";
-        fetchBossData();
-        return;
-    }
-    const mins = Math.floor(diff / 60000);
-    const secs = Math.floor((diff % 60000) / 1000);
-    document.getElementById('boss-spawn-timer').innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-}
-
-function attackBoss() {
-    if (isRateLimited('attackBoss', 100)) return; // 100ms cooldown max 10 CPS
-    const availableTaps = state.bossTaps - state.pendingBossTaps;
-    if (!currentBoss || availableTaps <= 0) {
-        if (availableTaps <= 0) appAlert("You need Taps to attack! Watch an ad to get 100 Taps.");
-        return;
-    }
-
-    const damage = 0.1;
-
-    // Check if daily damage cap is reached (1000 per day)
-    const progress = state.dailyTasksProgress || {};
-    if ((progress.bossDamage || 0) + damage > 1000) {
-        appAlert("Daily Limit! You have reached your max 1000 boss damage for today.");
-        return;
-    }
-
-    haptic('light');
-    
-    // Visual feedback
-    const visual = document.getElementById('boss-visual');
-    visual.classList.remove('boss-hit-anim');
-    void visual.offsetWidth; // Trigger reflow
-    visual.classList.add('boss-hit-anim');
-    createDamageParticle(damage);
-
-    // Update local pending state for real-time feel
-    state.pendingBossTaps++;
-    state.pendingBossDamage += damage;
-    updateTaskProgress('bossDamage', damage);
-    updateBossUI();
-    
-    // If boss HP reaches 0 locally, trigger immediate sync
-    const effectiveHp = currentBoss.current_hp - state.pendingBossDamage;
-    if (effectiveHp <= 0) {
-        syncBossData();
-    }
-}
-
-function createDamageParticle(damage) {
-    const bossArea = document.getElementById('boss-game-area');
-    if (!bossArea) return;
-    
-    const particle = document.createElement('div');
-    particle.innerText = `-${damage.toFixed(1)}`;
-    particle.style.position = 'absolute';
-    particle.style.color = '#ff4444';
-    particle.style.fontWeight = '900';
-    particle.style.fontSize = '28px';
-    particle.style.pointerEvents = 'none';
-    particle.style.textShadow = '0 0 10px #000, 0 0 20px #ff0000';
-    particle.style.zIndex = '100';
-    
-    // Randomize position around the center
-    const x = 50 + (Math.random() * 30 - 15);
-    const y = 30 + (Math.random() * 30 - 15);
-    
-    particle.style.left = `${x}%`;
-    particle.style.top = `${y}%`;
-    
-    bossArea.appendChild(particle);
-    
-    // Animate
-    let opacity = 1;
-    let topPos = y;
-    const anim = setInterval(() => {
-        opacity -= 0.05;
-        topPos -= 1.5;
-        particle.style.opacity = opacity;
-        particle.style.top = `${topPos}%`;
-        if (opacity <= 0) {
-            clearInterval(anim);
-            particle.remove();
-        }
-    }, 30);
-}
-
-async function syncBossData() {
-    if (!currentBoss || (state.pendingBossDamage === 0 && state.pendingBossTaps === 0)) return;
-
-    const damageToSync = state.pendingBossDamage;
-    const tapsToSync = state.pendingBossTaps;
-    
-    // Reset pending immediately to avoid double-counting
-    state.pendingBossDamage = 0;
-    state.pendingBossTaps = 0;
-    
-    // Deduct taps locally right away for instantly accurate UI
-    state.bossTaps -= tapsToSync;
-    updateBossUI();
-
-    try {
-        const { data, error } = await supabaseClient.rpc('secure_sync_boss_damage', {
-            p_telegram_id: tgUser.id,
-            p_boss_id: currentBoss.id,
-            p_damage: damageToSync,
-            p_taps_used: tapsToSync
-        });
-
-        if (error) throw error;
-        
-        if (data && !data.success) {
-            console.error("Boss Sync rejected by server:", data.error);
-            // Revert state if server rejects
-            state.bossTaps += tapsToSync;
-            updateBossUI();
-            fetchBossData();
-            return;
-        }
-
-        // Successfully synced
-        if (data && data.boss_died) {
-            appAlert("VICTORY! The boss has been defeated! The network securely distributed rewards.");
-            if (data.new_coins !== undefined) {
-                state.walletCoins = data.new_coins;
-                updateUI();
-            }
-            fetchBossData(); // Refreshes boss state and UI
-        }
-    } catch (err) {
-        console.error("Secure boss sync error:", err);
-        // Error could mean network issue, but we already wiped pending. This prevents
-        // hacker loops from queuing up 20000 damage while "offline"
-    }
-}
-
-async function distributeBossRewards(boss) {
-    // SECURITY UPDATE:
-    // This function originally manually updated other players' coins from the client side!
-    // That is incredibly dangerous. We have migrated this entirely to the Database Trigger.
-    // When the boss dies in the `secure_sync_boss_damage` RPC, the backend securely computes
-    // and distributes the rewards independently of the client.
-    console.log("Boss rewards are now securely handled by the Database Trigger!");
-}
-
-function watchAdForTaps() {
-    if (isRateLimited('watchAd', 1000)) return;
-    if (adBlockMining) {
-        appAlert("Loading ad for 100 Taps... 📺");
-        adBlockMining.show().then(() => {
-            grantTaps();
-        }).catch((err) => {
-            console.error("Ad error:", err);
-            appAlert("Ad failed to load. Try again later.");
-        });
-    } else {
-        appAlert("Ad system is blocked or still loading. Cannot grant Taps without an ad!");
-        initAds();
-    }
-}
-
-async function grantTaps() {
-    try {
-        const { data, error } = await supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'ad_taps', p_amount: 100, p_id: '' });
-        if (error) throw error;
-        if (data && data.success) {
-            state.bossTaps = data.new_taps;
-            updateBossUI();
-            appAlert("Success! +100 Taps granted securely. ⚔️");
-        } else {
-            throw new Error(data && data.error ? data.error : "RPC failed securely.");
-        }
-    } catch (err) {
-        console.error("Failed to grant taps securely:", err);
-        appAlert(`Error syncing taps: ${err.message}`);
-    }
-}
-
-async function spawnNewBoss() {
-    try {
-        const { data: lastBoss } = await supabaseClient
-            .from('boss_events')
-            .select('level')
-            .order('id', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-        
-        let nextLevel = 1;
-        if (lastBoss) {
-            nextLevel = (lastBoss.level % 5) + 1;
-        }
-        
-        const config = BOSS_LEVELS[nextLevel - 1];
-        
-        await supabaseClient.from('boss_events').insert({
-            level: nextLevel,
-            max_hp: config.hp,
-            current_hp: config.hp,
-            reward_tokens: config.reward,
-            status: 'active'
-        });
-        
-        fetchBossData();
-    } catch (err) {
-        console.error("Spawn error:", err);
-    }
-}
 

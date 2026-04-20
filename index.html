@@ -342,7 +342,7 @@
                         <div class="ability-section mt-10" style="background: var(--card-bg); padding: 15px; border-radius: 12px; border: 2px solid var(--card-border); box-shadow: var(--shadow-sm);">
                             <h3 style="color: var(--accent-cyan); margin-bottom: 8px;">📜 THE RULES</h3>
                             <ul style="font-size: 12px; margin-left: 20px; line-height: 1.6;">
-                                <li>You must be <b>Active 🟢</b> (complete 2 daily tasks).</li>
+                                <li>You must be <b>Active 🟢</b> (complete BOTH: Watch 3 ads AND Play 10 games).</li>
                                 <li>You must have submitted your <b>SOL Address</b> in the Profile tab.</li>
                                 <li>Active players automatically receive <b>1 Ticket</b> daily.</li>
                             </ul>
@@ -415,64 +415,6 @@
                             <button class="btn btn-action mt-10" style="background: var(--accent-green);" onclick="initGame2()">Play (1 ❤️)</button>
                         </div>
                         <div class="pop-out-element">🎯</div>
-                    </div>
-
-                    <div class="feature-card minigame-card" style="margin-top: 15px; border: 2px solid var(--accent-red);">
-                        <div class="card-bg-effect" style="background: radial-gradient(circle at center, rgba(255,0,0,0.1) 0%, transparent 70%);"></div>
-                        <div class="card-content">
-                            <h2>Boss <span style="color: var(--accent-red);">Raid</span></h2>
-                            <p class="subtitle">Join all players to defeat the Global Boss for massive token rewards!</p>
-                            <button class="btn btn-action mt-10" style="background: var(--accent-red);" onclick="initBossGame()">Enter Raid ⚔️</button>
-                        </div>
-                        <div class="pop-out-element float-alt" style="font-size: 80px;">👹</div>
-                    </div>
-                </div>
-
-                <div id="boss-game-area" class="hidden">
-                    <div class="game-header">
-                        <button class="btn btn-secondary btn-back" onclick="exitGame()">⬅ Back</button>
-                        <h3>Global Boss Raid</h3>
-                    </div>
-                    <div class="active-game-box" style="padding: 10px;">
-                        <div id="boss-info-container">
-                            <div class="boss-level-badge" id="boss-level-display">Level 1</div>
-                            <div class="boss-visual" id="boss-visual">🪨</div>
-                            
-                            <div class="ability-section" style="width: 100%; margin-top: 10px;">
-                                <div class="ability-info">
-                                    <span>Boss HP (XP)</span>
-                                    <span id="boss-hp-text">100,000 / 100,000</span>
-                                </div>
-                                <div class="progress-bar" style="height: 20px; border-color: var(--accent-red);">
-                                    <div class="fill" id="boss-hp-fill" style="width: 100%; background: var(--accent-red);"></div>
-                                </div>
-                            </div>
-
-                            <div class="stats-row mt-10" style="display: flex; gap: 10px; width: 100%;">
-                                <div class="stat-pill" style="flex: 1; justify-content: center;">
-                                    <span class="stat-icon">⚔️</span>
-                                    <span id="player-boss-damage">0.0</span> Damage
-                                </div>
-                                <div class="stat-pill" style="flex: 1; justify-content: center; background: var(--accent-yellow); color: #111;">
-                                    <span class="stat-icon">👆</span>
-                                    <span id="player-boss-taps">0</span> Taps
-                                </div>
-                            </div>
-
-                            <div class="action-section mt-20" style="width: 100%;">
-                                <button class="btn btn-action" id="btn-boss-attack" style="background: var(--accent-red); height: 80px; font-size: 24px;" onclick="attackBoss()">ATTACK! ⚔️</button>
-                                <button class="btn btn-secondary mt-10" onclick="watchAdForTaps()">Watch Ad (+100 Taps) 📺</button>
-                                <p class="subtitle" style="margin-top: 10px; font-size: 10px;">Each tap deals 0.1 XP damage. Rewards distributed proportionally after defeat.</p>
-                            </div>
-                        </div>
-
-                        <div id="boss-cooldown-container" class="hidden">
-                            <div style="font-size: 60px; margin-bottom: 20px;">⌛</div>
-                            <h2>Boss Defeated!</h2>
-                            <p class="subtitle">A new boss will spawn in:</p>
-                            <div class="massive-balance" id="boss-spawn-timer">00:00</div>
-                            <p class="subtitle mt-10">Rewards have been distributed to your wallet based on your damage contribution.</p>
-                        </div>
                     </div>
                 </div>
 
@@ -571,12 +513,12 @@
                     <div class="card-bg-effect"></div>
                     <div class="card-content" style="width: 100%;">
                         <h2>New <span style="color: var(--accent-cyan);">Features</span></h2>
-                        <p class="subtitle">The Global Boss Raid and Level System are now LIVE! Defeat monsters and climb ranks for massive rewards.</p>
+                        <p class="subtitle">The Level System is now LIVE! Climb ranks for massive rewards.</p>
                         <div class="ability-section mt-20">
                             <h3>Current Status</h3>
                             <div class="ability-row" style="margin-bottom: 4px;">
                                 <div class="ability-info" style="font-size: 10px; color: var(--accent-cyan);">
-                                    <span>Check the Play tab for Boss Raids and Profile for Levels.</span>
+                                    <span>Check your Profile to see your Level and rank.</span>
                                 </div>
                             </div>
                         </div>
@@ -693,24 +635,16 @@
                                     Mining Status
                                     <span id="profile-active-status" style="font-size: 12px; padding: 4px 8px; border-radius: 12px; background: rgba(255,255,255,0.1);">Checking...</span>
                                 </h3>
-                                <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">Complete any 2 of these daily tasks to keep your rig mining!</p>
+                                <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">Complete ANY 1 of these daily tasks to keep your rig mining!</p>
                                 
                                 <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
                                     <div style="display: flex; justify-content: space-between;">
-                                        <span>📺 Watch Ads (100 GH)</span>
-                                        <span id="status-ads" style="color: var(--accent-yellow);">0/100</span>
+                                        <span>📺 Watch Ads</span>
+                                        <span id="status-ads" style="color: var(--accent-yellow);">0/3</span>
                                     </div>
                                     <div style="display: flex; justify-content: space-between;">
-                                        <span>💎 Play Crystal Overload</span>
-                                        <span id="status-crystal" style="color: var(--accent-cyan);">0/30</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between;">
-                                        <span>🎯 Play Core Alignment</span>
-                                        <span id="status-core" style="color: var(--accent-green);">0/30</span>
-                                    </div>
-                                    <div style="display: flex; justify-content: space-between;">
-                                        <span>⚔️ Deal Boss Damage</span>
-                                        <span id="status-boss" style="color: var(--accent-red);">0/100</span>
+                                        <span>🎮 Play Minigames</span>
+                                        <span id="status-games" style="color: var(--accent-cyan);">0/10</span>
                                     </div>
                                 </div>
                             </div>
@@ -868,7 +802,7 @@
                 <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px;">
                     We just crossed 100 active miners! 🚀<br><br>
                     ⚡ <b>24-Hour Boost:</b> For a limited time, all Active Players can claim a massive <b>2x Mining Multiplier</b>!<br><br>
-                    🟢 <b>How limits work:</b> Complete 2 daily tasks to get your <b>Active</b> status, then head over to the new <b>48H Event</b> tab to claim!<br><br>
+                    🟢 <b>How limits work:</b> Complete BOTH: Watch 3 ads AND Play 10 games to get your <b>Active</b> status (lasts 24 hours), then head over to the new <b>48H Event</b> tab to claim!<br><br>
                     Thank you for making Miner Switch epic!
                 </p>
                 
