@@ -160,8 +160,7 @@ let state = {
         adPowerGained: 0
     },
     dailyTasksClaimed: [],
-    lastQuickRewardClaim: 0,
-    firstQuickRewardClaimed: false
+    lastQuickRewardClaim: 0
 };
 
 const ONE_TIME_TASKS = [
@@ -542,57 +541,30 @@ function checkQuickReward() {
     const cooldown = 6 * 60 * 60 * 1000;
     
     // Check if eligible
-    let rewardType = 'standard';
-    let rewardAmount = 50;
-    
-    if (!state.firstQuickRewardClaimed) {
-        rewardType = 'first';
-        rewardAmount = 100;
-    } else if (now - state.lastLoginDate > 24 * 60 * 60 * 1000) {
-        rewardType = 'comeback';
-        rewardAmount = 150;
-    } else if (now - state.lastQuickRewardClaim > cooldown) {
-        rewardType = 'standard';
-        rewardAmount = 50;
-    } else {
-        return; // Not eligible
+    if (now - state.lastQuickRewardClaim > cooldown) {
+        showQuickRewardModal(50);
     }
-    
-    showQuickRewardModal(rewardType, rewardAmount);
 }
 
-function showQuickRewardModal(type, amount) {
+function showQuickRewardModal(amount) {
     const modal = document.getElementById('quick-reward-modal');
     const title = document.getElementById('qr-title');
     const msg = document.getElementById('qr-msg');
     const bigReward = document.getElementById('qr-big-reward');
     
-    if (type === 'first') {
-        title.innerText = "🎉 WELCOME NEW MINER!";
-        msg.innerText = "You’ve received a special first-time bonus!";
-        bigReward.innerText = "+100 TOKENS! + 2x Boost (10m)";
-    } else if (type === 'comeback') {
-        title.innerText = "🔥 WELCOME BACK!";
-        msg.innerText = "We missed you miner! Here is your comeback bonus!";
-        bigReward.innerText = "+150 TOKENS!";
-    } else {
-        title.innerText = "🎉 QUICK REWARD!";
-        msg.innerText = "You’ve received a quick reward for being active!";
-        bigReward.innerText = "+"+amount+" TOKENS!";
-    }
+    title.innerText = "🎉 QUICK REWARD!";
+    msg.innerText = "You’ve received a quick reward for being active!";
+    bigReward.innerText = "+"+amount+" TOKENS!";
     
     modal.classList.remove('hidden');
     state.currentQuickRewardAmount = amount;
-    state.currentQuickRewardType = type;
 }
 
 function claimQuickReward() {
     haptic('success');
     
-    // Add reward
     const amount = state.currentQuickRewardAmount || 50;
     
-    // Grant via RPC securely
     supabaseClient.rpc('secure_grant_reward', { 
         p_telegram_id: tgUser.id, 
         p_type: 'quick_reward', 
@@ -600,18 +572,18 @@ function claimQuickReward() {
         p_id: 'quick' 
     }).then(({data, error}) => {
         if (!error && data && data.success) {
-            state.walletCoins = data.new_coins; 
-            if (state.currentQuickRewardType === 'first') state.firstQuickRewardClaimed = true;
+            // Securely update both state variables from server response
+            state.walletCoins = data.new_coins;
+            state.totalMinedFromPool = data.new_coins; 
             state.lastQuickRewardClaim = Date.now();
             
             appAlert("Bonus Activated! Tokens added to your wallet.");
-            
             document.getElementById('quick-reward-modal').classList.add('hidden');
             
-            // Logic to play sound (if exists) or anim
-            // updateUI(); // Will update UI automatically
-            forceSaveToDB();
-            updateUI();
+            // Force save to database immediately to persist the sync
+            forceSaveToDB().then(() => {
+                updateUI();
+            });
         } else {
             appAlert("Error claiming reward.");
         }
