@@ -39,6 +39,9 @@ try {
     if (tg.setHeaderColor) tg.setHeaderColor('#121418');
     if (tg.setBackgroundColor) tg.setBackgroundColor('#121418');
     if (tg.disableVerticalSwipes) tg.disableVerticalSwipes(); // Prevents annoying pull-to-refresh
+    
+    // Check for Quick Reward shortly after load
+    setTimeout(checkQuickReward, 3000);
 } catch(e) { 
     console.log("TG API advanced features not available"); 
 }
@@ -156,7 +159,9 @@ let state = {
         boxesOpened: 0,
         adPowerGained: 0
     },
-    dailyTasksClaimed: []
+    dailyTasksClaimed: [],
+    lastQuickRewardClaim: 0,
+    firstQuickRewardClaimed: false
 };
 
 const ONE_TIME_TASKS = [
@@ -530,8 +535,89 @@ const els = {
 };
 
 // ==========================================
-// 8. MAIN GAME LOOP
+// 12. QUICK REWARD SYSTEM
 // ==========================================
+function checkQuickReward() {
+    const now = Date.now();
+    const cooldown = 6 * 60 * 60 * 1000;
+    
+    // Check if eligible
+    let rewardType = 'standard';
+    let rewardAmount = 50;
+    
+    if (!state.firstQuickRewardClaimed) {
+        rewardType = 'first';
+        rewardAmount = 100;
+    } else if (now - state.lastLoginDate > 24 * 60 * 60 * 1000) {
+        rewardType = 'comeback';
+        rewardAmount = 150;
+    } else if (now - state.lastQuickRewardClaim > cooldown) {
+        rewardType = 'standard';
+        rewardAmount = 50;
+    } else {
+        return; // Not eligible
+    }
+    
+    showQuickRewardModal(rewardType, rewardAmount);
+}
+
+function showQuickRewardModal(type, amount) {
+    const modal = document.getElementById('quick-reward-modal');
+    const title = document.getElementById('qr-title');
+    const msg = document.getElementById('qr-msg');
+    const bigReward = document.getElementById('qr-big-reward');
+    
+    if (type === 'first') {
+        title.innerText = "🎉 WELCOME NEW MINER!";
+        msg.innerText = "You’ve received a special first-time bonus!";
+        bigReward.innerText = "+100 TOKENS! + 2x Boost (10m)";
+    } else if (type === 'comeback') {
+        title.innerText = "🔥 WELCOME BACK!";
+        msg.innerText = "We missed you miner! Here is your comeback bonus!";
+        bigReward.innerText = "+150 TOKENS!";
+    } else {
+        title.innerText = "🎉 QUICK REWARD!";
+        msg.innerText = "You’ve received a quick reward for being active!";
+        bigReward.innerText = "+"+amount+" TOKENS!";
+    }
+    
+    modal.classList.remove('hidden');
+    state.currentQuickRewardAmount = amount;
+    state.currentQuickRewardType = type;
+}
+
+function claimQuickReward() {
+    haptic('success');
+    
+    // Add reward
+    const amount = state.currentQuickRewardAmount || 50;
+    
+    // Grant via RPC securely
+    supabaseClient.rpc('secure_grant_reward', { 
+        p_telegram_id: tgUser.id, 
+        p_type: 'quick_reward', 
+        p_amount: amount, 
+        p_id: 'quick' 
+    }).then(({data, error}) => {
+        if (!error && data && data.success) {
+            state.walletCoins = data.new_coins; 
+            if (state.currentQuickRewardType === 'first') state.firstQuickRewardClaimed = true;
+            state.lastQuickRewardClaim = Date.now();
+            
+            appAlert("Bonus Activated! Tokens added to your wallet.");
+            
+            document.getElementById('quick-reward-modal').classList.add('hidden');
+            
+            // Logic to play sound (if exists) or anim
+            // updateUI(); // Will update UI automatically
+            forceSaveToDB();
+            updateUI();
+        } else {
+            appAlert("Error claiming reward.");
+        }
+    });
+}
+
 function gameLoop() {
     const now = Date.now();
     const timeDiff = now - state.lastCalcTime;

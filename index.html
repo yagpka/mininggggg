@@ -793,6 +793,21 @@
         </div>
 
         <!-- NEW: Boss Raid & Level System Popup -->
+        <!-- QUICK REWARD MODAL -->
+        <div id="quick-reward-modal" class="modal hidden">
+            <div class="modal-card" style="border: 2px solid var(--accent-yellow);">
+                <h2 id="qr-title" style="color: var(--accent-yellow);">🎉 WELCOME BACK!</h2>
+                <p id="qr-msg" style="margin: 15px 0;">You’ve received a quick reward for being active!</p>
+                
+                <div id="qr-reward-display" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <div id="qr-big-reward" style="font-size: 24px; font-weight: bold; color: var(--accent-yellow);">+50 TOKENS!</div>
+                </div>
+
+                <button id="qr-btn-claim" class="btn btn-action" style="background: var(--accent-yellow); color: #111; width: 100%;" onclick="claimQuickReward()">[ CLAIM REWARD ]</button>
+                <div style="font-size: 10px; margin-top: 10px; opacity: 0.7;">Claim within 10 seconds!</div>
+            </div>
+        </div>
+
         <!-- 100 USERS EVENT MODAL -->
         <div id="event-modal" class="modal hidden">
             <div class="modal-card" style="border: 2px solid var(--accent-purple);">
