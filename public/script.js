@@ -409,6 +409,7 @@ async function forceSaveToDB() {
             username: tgUser.username || "unknown", 
             pending_coins: state.pendingCoins, 
             total_mined: state.totalMinedFromPool, 
+            wallet_coins: state.totalMinedFromPool, // Synchronized here
             lives: state.lives,
             sol_address: state.solAddress, 
             streak_days: state.streakDays,
