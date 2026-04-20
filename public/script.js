@@ -140,7 +140,7 @@ function isRateLimited(action, msLimit) {
 }
 
 let state = {
-    gh: 0, pendingCoins: 0, walletCoins: 0, totalMinedFromPool: 0,
+    gh: 0, pendingCoins: 0, walletCoins: 0, totalMinedFromPool: 0, totalLifetimeTokens: 0,
     lives: 0, solAddress: "", lastCalcTime: Date.now(), heatMs: 0,               
     streakDays: 1, lastLoginDate: "", completedTasks: [],
     socialHistory: [], // Added to store their submission history    
@@ -570,6 +570,9 @@ function updateUI() {
     const formattedWallet = state.walletCoins.toFixed(2);
     els.walletHeader.innerText = formattedWallet;
     els.walletMain.innerText = formattedWallet;
+    // Assume there is an element for total lifetime tokens
+    const totalTokensEl = document.getElementById('total-tokens-display');
+    if (totalTokensEl) totalTokensEl.innerText = state.totalLifetimeTokens.toFixed(2);
     els.lives.innerText = state.lives;
     els.solDisplay.innerText = state.solAddress || "None";
 
@@ -656,6 +659,36 @@ function checkClaimAvailability() {
     }
 }
 
+
+async function grantReward(type, amount, id) {
+    const safeAmount = parseFloat(parseFloat(amount).toFixed(4));
+    try {
+        const { data, error } = await supabaseClient.rpc('secure_grant_reward', {
+            p_telegram_id: tgUser.id,
+            p_type: type,
+            p_amount: safeAmount,
+            p_id: id || ''
+        });
+
+        if (!error && data && data.success) {
+            // Generic update for lifetime tokens if it's a coin grant
+            if (type.includes('coins')) {
+                state.totalLifetimeTokens = data.total_lifetime_tokens || (state.totalLifetimeTokens + safeAmount);
+            }
+            
+            forceSaveToDB();
+            updateUI();
+            return { success: true, data };
+        } else {
+            console.error("RPC grant reward failed:", error);
+            throw new Error(data?.error || "RPC call failed");
+        }
+    } catch (e) {
+        console.error("Error in grantReward:", e);
+        return { success: false, error: e };
+    }
+}
+
 function claimCoins() {
     if (isRateLimited('claimCoins', 2000)) return;
     if (state.pendingCoins < 0.9999) return;
@@ -665,22 +698,11 @@ function claimCoins() {
     const claimAmount = Math.floor(state.pendingCoins * 10000) / 10000;
     state.pendingCoins = 0;
     
-    // Explicitly pass amount as a float/number to ensure backend receives the full value
-    supabaseClient.rpc('secure_grant_reward', { 
-        p_telegram_id: tgUser.id, 
-        p_type: 'pool_coins', 
-        p_amount: parseFloat(claimAmount.toFixed(4)), 
-        p_id: '' 
-    }).then(({data, error}) => {
-        if (!error && data && data.success) {
-            state.walletCoins = data.new_coins;
-            forceSaveToDB(); 
-            updateUI();
+    grantReward('pool_coins', claimAmount, '').then(res => {
+        if (res.success) {
             appAlert("Coins successfully added to your wallet securely!");
         } else {
-            console.error("RPC failed securely:", error);
-            appAlert(data && data.error ? data.error : "Error claiming coins.");
-            // Revert visually if failed
+            appAlert("Error claiming coins.");
             state.pendingCoins += claimAmount;
         }
     });
@@ -918,19 +940,18 @@ async function claimTaskReward(taskId, type) {
 
     try {
         if (task.reward.type === 'gh') {
-            const { data, error } = await supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'task_gh', p_amount: task.reward.amount, p_id: task.id });
-            if (error) throw error;
-            if (data && data.success) {
-                state.gh = data.new_gh;
+            const res = await grantReward('task_gh', task.reward.amount, task.id);
+            if (res.success) {
+                state.gh = res.data.new_gh;
             } else {
-                throw new Error(data && data.error ? data.error : "RPC failed securely.");
+                throw new Error("RPC failed securely.");
             }
         } else if (task.reward.type === 'coins') {
-            const { data, error } = await supabaseClient.rpc('secure_grant_reward', { p_telegram_id: tgUser.id, p_type: 'task_coins', p_amount: task.reward.amount, p_id: task.id });
-            if (!error && data && data.success) {
-                state.walletCoins = data.new_coins;
+            const res = await grantReward('task_coins', task.reward.amount, task.id);
+            if (res.success) {
+                state.walletCoins = res.data.new_coins;
             } else {
-                throw new Error(data && data.error ? data.error : "RPC failed securely.");
+                throw new Error("RPC failed securely.");
             }
         }
     } catch (err) {
