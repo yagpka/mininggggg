@@ -305,6 +305,7 @@ async function loadGameData() {
             state.pendingCoins = Number(dbState.pending_coins) || 0;
             state.walletCoins = Number(dbState.wallet_coins) || 0;
             state.totalMinedFromPool = Number(dbState.total_mined) || 0;
+            state.totalClaimedTokens = Number(dbState.total_claimed_tokens) || 0;
             state.lives = Number(dbState.lives) || 0;
             state.solAddress = dbState.sol_address || "";
             state.streakDays = Number(dbState.streak_days) || 1;
