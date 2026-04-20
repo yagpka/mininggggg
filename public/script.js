@@ -46,7 +46,6 @@ try {
 let tgUser = tg.initDataUnsafe?.user;
 
 // Allow testing via URL parameter ?test_user=12345
-const urlParams = new URLSearchParams(window.location.search);
 if (!tgUser && urlParams.has('test_user')) {
     tgUser = { id: urlParams.get('test_user'), first_name: "Tester", username: "tester777" };
     console.log("Using Test User:", tgUser);
